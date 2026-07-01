@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
+from wb_api import WbApiError, get_balance
 from wb_profit import analyze_report, build_messages
 
 
@@ -59,6 +60,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "1. Скачай детализацию отчёта реализации в формате XLSX.\n"
         "2. Отправь файл сюда как документ.\n"
         "3. Я посчитаю выплату, себестоимость, УСН 6%, прибыль и маржу.\n\n"
+        "Команда /balance проверит подключение к WB API и покажет баланс.\n"
         "Команда /id покажет твой Telegram ID для закрытия доступа к боту."
     )
 
@@ -72,6 +74,34 @@ async def show_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.effective_message.reply_text(
             f"Твой Telegram ID: {update.effective_user.id}\n"
             "Добавь его в Railway как переменную ALLOWED_USER_ID, чтобы бот отвечал только тебе."
+        )
+
+
+async def wb_balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await reject_if_not_allowed(update):
+        return
+    message = update.effective_message
+    if not message:
+        return
+
+    token = os.getenv("WB_API_TOKEN", "").strip()
+    status = await message.reply_text("Проверяю подключение к WB API…")
+    try:
+        balance = await get_balance(token)
+        await status.edit_text(
+            "✅ Подключение к WB API работает.\n\n"
+            f"Баланс кабинета: {balance.current:,.2f} {balance.currency}".replace(",", " ")
+            + "\n"
+            + f"Доступно к выводу: {balance.for_withdraw:,.2f} {balance.currency}".replace(",", " ")
+            + "\n\nСледующий этап — автоматическая загрузка финансовых отчётов."
+        )
+    except WbApiError as exc:
+        await status.edit_text(f"❌ Не удалось подключиться к WB API.\n\n{exc}")
+    except Exception as exc:
+        logger.exception("Непредвиденная ошибка при запросе баланса WB")
+        await status.edit_text(
+            "❌ Возникла непредвиденная ошибка при проверке WB API.\n"
+            f"Техническая ошибка: {type(exc).__name__}: {exc}"
         )
 
 
@@ -123,7 +153,7 @@ async def unknown_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if await reject_if_not_allowed(update):
         return
     if update.effective_message:
-        await update.effective_message.reply_text("Пришли детализацию WB файлом .xlsx или используй /help.")
+        await update.effective_message.reply_text("Пришли детализацию WB файлом .xlsx или используй /balance для проверки WB API.")
 
 
 def main() -> None:
@@ -135,6 +165,7 @@ def main() -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("id", show_id))
+    app.add_handler(CommandHandler("balance", wb_balance))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.ALL, unknown_message))
 
