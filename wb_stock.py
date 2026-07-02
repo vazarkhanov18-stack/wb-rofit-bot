@@ -236,6 +236,51 @@ def build_stock_messages(snapshot: InventorySnapshot) -> list[str]:
     return _split_blocks(header, blocks, "\n".join(footer_parts))
 
 
+
+def build_stock_alert_message(
+    snapshot: InventorySnapshot,
+    *,
+    low_days: int = 14,
+    target_days: int = 30,
+) -> str | None:
+    """Короткое предупреждение только по товарам, которым скоро нужна поставка."""
+    alert_items = [
+        item
+        for item in snapshot.items
+        if item.daily_sales > 0
+        and item.days_left is not None
+        and item.days_left < low_days
+    ]
+    if not alert_items:
+        return None
+
+    alert_items.sort(key=lambda item: (item.days_left or 0, -item.daily_sales, item.name.lower()))
+    lines = [
+        f"🚨 Контроль остатков на {snapshot.as_of.strftime('%d.%m.%Y')}",
+        f"Товары с запасом менее {low_days} дней:",
+        "",
+    ]
+    for item in alert_items[:20]:
+        days_left = item.days_left or 0.0
+        icon = "🔴" if days_left <= 7 else "🟠"
+        supply = item.recommended_supply(target_days)
+        lines.extend(
+            [
+                f"{icon} {_short(item.name)}",
+                f"Артикул: {item.sku}",
+                f"Остаток: {item.available} шт. | Продажи: {item.daily_sales:.2f} шт./день",
+                f"Хватит примерно на {days_left:.1f} дня",
+                f"Рекомендуемая поставка до запаса на {target_days} дней: {supply} шт.",
+                "",
+            ]
+        )
+
+    if len(alert_items) > 20:
+        lines.append(f"И ещё товаров с низким запасом: {len(alert_items) - 20}.")
+    if snapshot.fbs_warning:
+        lines.append("⚠️ FBS мог быть учтён не полностью: " + snapshot.fbs_warning)
+    return "\n".join(lines).strip()
+
 def build_supply_messages(
     snapshot: InventorySnapshot,
     *,

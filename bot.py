@@ -24,7 +24,12 @@ from wb_api import (
 )
 from wb_api_profit import analyze_api_report, apply_advertising
 from wb_profit import ReportResult, analyze_report, build_messages, format_money, format_period, format_units
-from wb_stock import build_inventory_snapshot, build_stock_messages, build_supply_messages
+from wb_stock import (
+    build_inventory_snapshot,
+    build_stock_alert_message,
+    build_stock_messages,
+    build_supply_messages,
+)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -70,6 +75,10 @@ def auto_weekly_enabled() -> bool:
     return env_flag("AUTO_WEEKLY_REPORT")
 
 
+def auto_stock_alert_enabled() -> bool:
+    return env_flag("AUTO_STOCK_ALERT")
+
+
 def configured_timezone() -> ZoneInfo:
     name = os.getenv("REPORT_TIMEZONE", "Europe/Moscow").strip() or "Europe/Moscow"
     try:
@@ -100,6 +109,10 @@ def configured_daily_time() -> tuple[int, int]:
 
 def configured_weekly_time() -> tuple[int, int]:
     return configured_time("WEEKLY_REPORT_TIME", "13:00")
+
+
+def configured_stock_alert_time() -> tuple[int, int]:
+    return configured_time("STOCK_ALERT_TIME", "14:00")
 
 
 def configured_percent(variable: str, default: float) -> float:
@@ -191,6 +204,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/balance — проверить подключение и баланс кабинета.\n"
         "/stocks — текущие остатки FBW и FBS.\n"
         "/supply — прогноз, на сколько дней хватит товара и сколько поставить.\n"
+        "/stockalerts — проверить товары с низким остатком.\n"
         "/schedule — статус автоматических отчётов.\n"
         "/id — показать твой Telegram ID.\n\n"
         "Также можно по-прежнему прислать детализацию WB файлом .xlsx."
@@ -733,6 +747,47 @@ async def supply_forecast(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
 
 
+async def stock_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await reject_if_not_allowed(update):
+        return
+    message = update.effective_message
+    if not message:
+        return
+    token = os.getenv("WB_API_TOKEN", "").strip()
+    status = await message.reply_text(
+        "Проверяю остатки и скорость продаж. Это может занять около минуты…"
+    )
+    try:
+        snapshot = await calculate_inventory_snapshot(
+            token,
+            include_sales=True,
+            status=status,
+        )
+        low_days = configured_int("STOCK_LOW_DAYS", 14, minimum=1, maximum=180)
+        target_days = configured_int("STOCK_TARGET_DAYS", 30, minimum=1, maximum=365)
+        if target_days < low_days:
+            target_days = low_days
+        alert_text = build_stock_alert_message(
+            snapshot,
+            low_days=low_days,
+            target_days=target_days,
+        )
+        if alert_text:
+            await status.edit_text(alert_text)
+        else:
+            await status.edit_text(
+                f"✅ Товаров с запасом менее {low_days} дней не найдено."
+            )
+    except WbApiError as exc:
+        await status.edit_text(f"❌ Не удалось проверить низкие остатки.\n\n{exc}")
+    except Exception as exc:
+        logger.exception("Ошибка контроля низких остатков")
+        await status.edit_text(
+            "❌ Не смог проверить низкие остатки.\n"
+            f"Техническая ошибка: {type(exc).__name__}: {exc}"
+        )
+
+
 async def schedule_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await reject_if_not_allowed(update):
         return
@@ -743,6 +798,7 @@ async def schedule_status(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     timezone = configured_timezone()
     daily_hour, daily_minute = configured_daily_time()
     weekly_hour, weekly_minute = configured_weekly_time()
+    stock_hour, stock_minute = configured_stock_alert_time()
 
     daily_status = (
         f"✅ Ежедневный: каждый день в {daily_hour:02d}:{daily_minute:02d}"
@@ -754,10 +810,16 @@ async def schedule_status(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if auto_weekly_enabled()
         else "⏸ Недельный: выключен"
     )
+    stock_status = (
+        f"✅ Остатки: каждый день в {stock_hour:02d}:{stock_minute:02d}"
+        if auto_stock_alert_enabled()
+        else "⏸ Остатки: автоматические предупреждения выключены"
+    )
     await message.reply_text(
-        f"{daily_status}\n{weekly_status}\nЧасовой пояс: {timezone.key}\n\n"
+        f"{daily_status}\n{weekly_status}\n{stock_status}\nЧасовой пояс: {timezone.key}\n\n"
         "Настройки Railway Variables:\n"
-        "AUTO_DAILY_REPORT, DAILY_REPORT_TIME, AUTO_WEEKLY_REPORT, WEEKLY_REPORT_TIME, REPORT_TIMEZONE."
+        "AUTO_DAILY_REPORT, DAILY_REPORT_TIME, AUTO_WEEKLY_REPORT, WEEKLY_REPORT_TIME, "
+        "AUTO_STOCK_ALERT, STOCK_ALERT_TIME, REPORT_TIMEZONE."
     )
 
 
@@ -784,6 +846,32 @@ async def scheduled_weekly_report(context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error("Автоматический недельный отчёт пропущен: не задан ALLOWED_USER_ID.")
         return
     await send_weekly_comparison_to_chat(context.bot, int(chat_id), automatic=True)
+
+
+async def scheduled_stock_alert(context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = context.job.chat_id if context.job else allowed_user_id()
+    if not chat_id:
+        logger.error("Автоматический контроль остатков пропущен: не задан ALLOWED_USER_ID.")
+        return
+
+    token = os.getenv("WB_API_TOKEN", "").strip()
+    try:
+        snapshot = await calculate_inventory_snapshot(token, include_sales=True)
+        low_days = configured_int("STOCK_LOW_DAYS", 14, minimum=1, maximum=180)
+        target_days = configured_int("STOCK_TARGET_DAYS", 30, minimum=1, maximum=365)
+        if target_days < low_days:
+            target_days = low_days
+        alert_text = build_stock_alert_message(
+            snapshot,
+            low_days=low_days,
+            target_days=target_days,
+        )
+        if alert_text:
+            await context.bot.send_message(int(chat_id), "📅 Автоматическая проверка.\n\n" + alert_text)
+        else:
+            logger.info("Автоматический контроль остатков: критичных позиций нет.")
+    except Exception:
+        logger.exception("Ошибка автоматического контроля остатков")
 
 
 async def configure_jobs(application: Application) -> None:
@@ -849,6 +937,30 @@ async def configure_jobs(application: Application) -> None:
         logger.info("Автоматический недельный отчёт выключен.")
 
 
+    if auto_stock_alert_enabled():
+        hour, minute = configured_stock_alert_time()
+        job_queue.run_daily(
+            scheduled_stock_alert,
+            time=dt_time(hour=hour, minute=minute, tzinfo=timezone),
+            chat_id=chat_id,
+            user_id=chat_id,
+            name="daily-low-stock-alert",
+            job_kwargs={
+                "coalesce": True,
+                "max_instances": 1,
+                "misfire_grace_time": 3600,
+            },
+        )
+        logger.info(
+            "Автоматический контроль остатков назначен на %02d:%02d (%s)",
+            hour,
+            minute,
+            timezone.key,
+        )
+    else:
+        logger.info("Автоматический контроль остатков выключен.")
+
+
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await reject_if_not_allowed(update):
         return
@@ -898,7 +1010,7 @@ async def unknown_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
     if update.effective_message:
         await update.effective_message.reply_text(
-            "Используй /yesterday, /week, /compare, /month, /report, /stocks, /supply, /schedule или пришли файл .xlsx."
+            "Используй /yesterday, /week, /compare, /month, /report, /stocks, /supply, /stockalerts, /schedule или пришли файл .xlsx."
         )
 
 
@@ -919,11 +1031,12 @@ def main() -> None:
     app.add_handler(CommandHandler("report", custom_report))
     app.add_handler(CommandHandler("stocks", stocks_report))
     app.add_handler(CommandHandler("supply", supply_forecast))
+    app.add_handler(CommandHandler("stockalerts", stock_alerts))
     app.add_handler(CommandHandler("schedule", schedule_status))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.ALL, unknown_message))
 
-    logger.info("WB Profit Bot v9 запущен")
+    logger.info("WB Profit Bot v10 запущен")
     app.run_polling(drop_pending_updates=True)
 
 
