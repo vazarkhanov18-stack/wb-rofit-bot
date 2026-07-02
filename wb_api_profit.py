@@ -4,6 +4,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Iterable
 
+from wb_api import AdvertisingStats
 from wb_profit import (
     UNALLOCATED_SKU,
     ReportResult,
@@ -22,13 +23,21 @@ def _value(row: dict[str, Any], key: str, default: Any = None) -> Any:
     return default if value is None else value
 
 
+def _as_nm_id(value: Any) -> int | None:
+    try:
+        result = int(value)
+        return result if result > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
 def analyze_api_report(
     rows: Iterable[dict[str, Any]],
     costs_path: str | Path,
     requested_start: date | None = None,
     requested_end: date | None = None,
 ) -> ReportResult:
-    """Считает прибыль из строк нового Finance API WB."""
+    """Считает прибыль из строк Finance API WB."""
     rows = list(rows)
     costs = load_costs(costs_path)
 
@@ -38,14 +47,18 @@ def analyze_api_report(
     }
 
     barcode_to_sku: dict[str, str] = {}
+    nm_to_sku: dict[int, str] = {}
     report_names: dict[str, str] = {}
     for row in rows:
         vendor_code = _value(row, "vendorCode")
         barcode = _value(row, "sku")
+        nm_id = _as_nm_id(_value(row, "nmId"))
         if valid_sku(vendor_code):
             sku_key = normalize_sku(vendor_code)
             if barcode not in (None, ""):
                 barcode_to_sku[str(barcode).strip()] = sku_key
+            if nm_id:
+                nm_to_sku[nm_id] = sku_key
             title = str(_value(row, "title", "") or "").strip()
             if title:
                 report_names[sku_key] = title
@@ -62,12 +75,14 @@ def analyze_api_report(
         )
 
         vendor_code = _value(row, "vendorCode")
+        nm_id = _as_nm_id(_value(row, "nmId"))
         sku_key = normalize_sku(vendor_code) if valid_sku(vendor_code) else ""
 
+        if not sku_key and nm_id:
+            sku_key = nm_to_sku.get(nm_id, "")
         if not sku_key and (is_sale or is_return):
             barcode = _value(row, "sku")
             sku_key = barcode_to_sku.get(str(barcode).strip(), "")
-
         if not sku_key:
             sku_key = normalize_sku(UNALLOCATED_SKU)
 
@@ -77,9 +92,16 @@ def analyze_api_report(
                 sku_key,
                 "Расходы без артикула в отчёте WB" if display_sku == UNALLOCATED_SKU else display_sku,
             )
-            results[sku_key] = SkuResult(sku=display_sku, name=display_name, unit_cost=0.0)
+            results[sku_key] = SkuResult(
+                sku=display_sku,
+                name=display_name,
+                unit_cost=0.0,
+                nm_id=nm_id,
+            )
 
         item = results[sku_key]
+        if nm_id and not item.nm_id:
+            item.nm_id = nm_id
         if not item.name:
             item.name = report_names.get(sku_key, item.sku)
 
@@ -130,3 +152,41 @@ def analyze_api_report(
         items=active,
         missing_cost_skus=missing,
     )
+
+
+def apply_advertising(result: ReportResult, stats: AdvertisingStats) -> ReportResult:
+    """Добавляет к финансовому отчёту расходы рекламы по nmId."""
+    items_by_nm: dict[int, SkuResult] = {
+        item.nm_id: item for item in result.items if item.nm_id is not None
+    }
+    unmatched: list[int] = []
+
+    for nm_id, spend in stats.by_nm_id.items():
+        if abs(spend) < 1e-9:
+            continue
+        item = items_by_nm.get(nm_id)
+        if item is None:
+            item = SkuResult(
+                sku=f"WB-{nm_id}",
+                name=stats.names.get(nm_id, f"Товар WB {nm_id}"),
+                nm_id=nm_id,
+            )
+            result.items.append(item)
+            items_by_nm[nm_id] = item
+            unmatched.append(nm_id)
+        item.advertising += spend
+
+    if stats.unallocated > 0.01:
+        result.items.append(
+            SkuResult(
+                sku="РЕКЛАМА-НЕРАСПРЕДЕЛЕНО",
+                name="Реклама WB без разбивки по товару",
+                advertising=stats.unallocated,
+            )
+        )
+
+    result.unmatched_ad_nm_ids = sorted(set(unmatched))
+    result.advertising_campaign_count = stats.campaign_count
+    result.items = [item for item in result.items if item.has_activity]
+    result.items.sort(key=lambda item: (item.revenue, item.profit), reverse=True)
+    return result

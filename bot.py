@@ -12,8 +12,8 @@ from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
-from wb_api import WbApiError, get_balance, get_sales_report
-from wb_api_profit import analyze_api_report
+from wb_api import WbApiError, get_advertising_stats, get_balance, get_sales_report
+from wb_api_profit import analyze_api_report, apply_advertising
 from wb_profit import analyze_report, build_messages
 
 
@@ -145,12 +145,6 @@ async def send_api_report(
     )
     try:
         rows = await get_sales_report(token, date_from, date_to, period="weekly")
-        if not rows:
-            await status.edit_text(
-                "WB не вернул данных за этот период. Возможно, отчёт ещё не сформирован или в периоде не было операций."
-            )
-            return
-
         result = await asyncio.to_thread(
             analyze_api_report,
             rows,
@@ -158,6 +152,24 @@ async def send_api_report(
             date_from,
             date_to,
         )
+
+        await status.edit_text(
+            f"Финансовый отчёт получен. Загружаю рекламу за "
+            f"{date_from.strftime('%d.%m.%Y')}–{date_to.strftime('%d.%m.%Y')}…"
+        )
+        try:
+            ad_stats = await get_advertising_stats(token, date_from, date_to)
+            result = apply_advertising(result, ad_stats)
+        except WbApiError as ad_exc:
+            logger.warning("Не удалось загрузить рекламу WB: %s", ad_exc)
+            result.advertising_warning = str(ad_exc)
+
+        if not result.active_items:
+            await status.edit_text(
+                "WB не вернул финансовых операций и рекламных расходов за этот период."
+            )
+            return
+
         messages = build_messages(result)
         await status.edit_text(messages[0])
         for text in messages[1:]:
@@ -273,7 +285,7 @@ def main() -> None:
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.ALL, unknown_message))
 
-    logger.info("WB Profit Bot v3 запущен")
+    logger.info("WB Profit Bot v4 запущен")
     app.run_polling(drop_pending_updates=True)
 
 

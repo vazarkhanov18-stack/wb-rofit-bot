@@ -26,6 +26,7 @@ class SkuResult:
     sku: str
     name: str = ""
     unit_cost: float = 0.0
+    nm_id: int | None = None
     sold_units: float = 0.0
     revenue: float = 0.0
     payout_for_goods: float = 0.0
@@ -35,6 +36,7 @@ class SkuResult:
     storage: float = 0.0
     other_withholdings: float = 0.0
     fines: float = 0.0
+    advertising: float = 0.0
 
     @property
     def calculated_payout(self) -> float:
@@ -57,12 +59,20 @@ class SkuResult:
         return self.revenue * TAX_RATE
 
     @property
-    def profit(self) -> float:
+    def profit_before_ads(self) -> float:
         return self.calculated_payout - self.cogs - self.tax
+
+    @property
+    def profit(self) -> float:
+        return self.profit_before_ads - self.advertising
 
     @property
     def margin(self) -> float:
         return self.profit / self.revenue if self.revenue else 0.0
+
+    @property
+    def drr(self) -> float:
+        return self.advertising / self.revenue if self.revenue else 0.0
 
     @property
     def profit_per_unit(self) -> float:
@@ -82,6 +92,7 @@ class SkuResult:
                 self.storage,
                 self.other_withholdings,
                 self.fines,
+                self.advertising,
             )
         )
 
@@ -92,6 +103,9 @@ class ReportResult:
     period_end: date | None
     items: list[SkuResult]
     missing_cost_skus: list[str] = field(default_factory=list)
+    unmatched_ad_nm_ids: list[int] = field(default_factory=list)
+    advertising_warning: str = ""
+    advertising_campaign_count: int = 0
 
     @property
     def active_items(self) -> list[SkuResult]:
@@ -109,6 +123,7 @@ class ReportResult:
             total.storage += item.storage
             total.other_withholdings += item.other_withholdings
             total.fines += item.fines
+            total.advertising += item.advertising
             total.unit_cost = 0.0
         # Себестоимость суммируется отдельно, поэтому подменяем вычисляемое поле
         total._cogs_override = sum(item.cogs for item in self.active_items)  # type: ignore[attr-defined]
@@ -117,6 +132,14 @@ class ReportResult:
     @property
     def total_cogs(self) -> float:
         return sum(item.cogs for item in self.active_items)
+
+    @property
+    def total_profit_before_ads(self) -> float:
+        return sum(item.profit_before_ads for item in self.active_items)
+
+    @property
+    def total_advertising(self) -> float:
+        return sum(item.advertising for item in self.active_items)
 
     @property
     def total_profit(self) -> float:
@@ -141,6 +164,10 @@ class ReportResult:
     @property
     def margin(self) -> float:
         return self.total_profit / self.total_revenue if self.total_revenue else 0.0
+
+    @property
+    def drr(self) -> float:
+        return self.total_advertising / self.total_revenue if self.total_revenue else 0.0
 
     @property
     def profit_per_unit(self) -> float:
@@ -425,12 +452,23 @@ def build_messages(result: ReportResult) -> list[str]:
         f"Расчётная выплата: {format_money(result.total_payout)}",
         f"Себестоимость: {format_money(result.total_cogs)}",
         f"УСН 6%: {format_money(result.total_tax)}",
-        "Реклама: 0,00 ₽",
+        f"Прибыль до рекламы: {format_money(result.total_profit_before_ads)}",
+        f"Реклама WB: {format_money(result.total_advertising)}",
+        f"ДРР: {result.drr * 100:.1f}%",
         "",
         f"💰 Чистая прибыль: {format_money(total_profit)}",
         f"Маржинальность: {result.margin * 100:.1f}%",
         f"Прибыль на единицу: {format_money(result.profit_per_unit)}",
     ]
+
+    if result.advertising_warning:
+        summary.extend(
+            [
+                "",
+                "⚠️ Реклама не была учтена полностью:",
+                result.advertising_warning,
+            ]
+        )
 
     if result.missing_cost_skus:
         summary.extend(
@@ -438,6 +476,18 @@ def build_messages(result: ReportResult) -> list[str]:
                 "",
                 "⚠️ Не найдена себестоимость: " + ", ".join(result.missing_cost_skus),
                 "Итоговая прибыль по этим товарам может быть завышена.",
+            ]
+        )
+
+    if result.unmatched_ad_nm_ids:
+        shown = ", ".join(str(value) for value in result.unmatched_ad_nm_ids[:10])
+        if len(result.unmatched_ad_nm_ids) > 10:
+            shown += "…"
+        summary.extend(
+            [
+                "",
+                "⚠️ Реклама найдена, но не связана с артикулом продавца для WB-артикулов: " + shown,
+                "Общая прибыль учтена верно, но расходы по товарам могут отображаться отдельными строками.",
             ]
         )
 
@@ -452,13 +502,15 @@ def build_messages(result: ReportResult) -> list[str]:
                 f"{label}",
                 f"Артикул: {item.sku}",
                 f"Продано: {format_units(item.sold_units)} | Доход: {format_money(item.revenue)}",
+                f"Реклама: {format_money(item.advertising)} | ДРР: {item.drr * 100:.1f}%",
                 f"Прибыль: {format_money(item.profit)} | Маржа: {item.margin * 100:.1f}%",
             ]
         )
 
     notes = [
         "",
-        "Расчёт предварительный: учтены данные отчёта WB, себестоимость и УСН 6%. Внешняя доставка, зарплаты, аренда и другие расходы пока не включены.",
+        "Расчёт предварительный: учтены финансовый отчёт WB, себестоимость, УСН 6% и расходы WB Продвижение. Внешняя доставка, зарплаты, аренда и другие расходы пока не включены.",
     ]
 
     return ["\n".join(summary), "\n".join(detail + notes)]
+
