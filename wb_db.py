@@ -405,3 +405,228 @@ def list_dashboard_skus(report_id: int, limit: int = 200) -> list[DashboardSkuRo
                 (int(report_id), limit),
             )
             return [DashboardSkuRow(**dict(row)) for row in cursor.fetchall()]
+
+@dataclass(frozen=True)
+class ProductSummaryRow:
+    sku: str
+    nm_id: int | None
+    name: str
+    periods: int
+    first_period: date
+    last_period: date
+    units: float
+    revenue: float
+    payout: float
+    cogs: float
+    tax: float
+    advertising: float
+    unit_expenses: float
+    general_expenses: float
+    external_expenses: float
+    operating_before_ads_tax: float
+    profit_before_ads: float
+    profit_before_tax: float
+    profit: float
+    margin: float
+    drr: float
+
+
+@dataclass(frozen=True)
+class ProductPeriodRow:
+    report_id: int
+    period_start: date
+    period_end: date
+    period_type: str
+    units: float
+    revenue: float
+    payout: float
+    cogs: float
+    tax: float
+    advertising: float
+    unit_expenses: float
+    general_expenses: float
+    external_expenses: float
+    operating_before_ads_tax: float
+    profit_before_ads: float
+    profit_before_tax: float
+    profit: float
+    margin: float
+    drr: float
+
+
+def _product_filter_sql(
+    *,
+    period_type: str | None,
+    date_from: date | None,
+    date_to: date | None,
+    query: str = "",
+    exact_sku: str = "",
+) -> tuple[str, list[object]]:
+    clauses: list[str] = []
+    params: list[object] = []
+    if period_type:
+        clauses.append("r.period_type = %s")
+        params.append(period_type)
+    if date_from is not None:
+        clauses.append("r.period_end >= %s")
+        params.append(date_from)
+    if date_to is not None:
+        clauses.append("r.period_start <= %s")
+        params.append(date_to)
+    if exact_sku:
+        clauses.append("LOWER(BTRIM(s.sku)) = LOWER(BTRIM(%s))")
+        params.append(exact_sku)
+    elif query:
+        pattern = f"%{query.strip()}%"
+        clauses.append(
+            "(s.sku ILIKE %s OR COALESCE(s.name, '') ILIKE %s OR COALESCE(CAST(s.nm_id AS TEXT), '') ILIKE %s)"
+        )
+        params.extend([pattern, pattern, pattern])
+    return ("WHERE " + " AND ".join(clauses)) if clauses else "", params
+
+
+def list_product_summaries(
+    limit: int = 500,
+    *,
+    period_type: str | None = "weekly",
+    date_from: date | None = None,
+    date_to: date | None = None,
+    query: str = "",
+) -> list[ProductSummaryRow]:
+    """Агрегированная экономика товаров по выбранному непересекающемуся типу периодов."""
+    limit = max(1, min(int(limit), 2000))
+    where_sql, params = _product_filter_sql(
+        period_type=period_type,
+        date_from=date_from,
+        date_to=date_to,
+        query=query,
+    )
+    params.append(limit)
+    with _connect() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                f"""
+                SELECT
+                    s.sku,
+                    MAX(s.nm_id) AS nm_id,
+                    COALESCE(MAX(NULLIF(s.name, '')), s.sku) AS name,
+                    COUNT(DISTINCT r.id)::INTEGER AS periods,
+                    MIN(r.period_start) AS first_period,
+                    MAX(r.period_end) AS last_period,
+                    COALESCE(SUM(s.units), 0) AS units,
+                    COALESCE(SUM(s.revenue), 0) AS revenue,
+                    COALESCE(SUM(s.payout), 0) AS payout,
+                    COALESCE(SUM(s.cogs), 0) AS cogs,
+                    COALESCE(SUM(s.tax), 0) AS tax,
+                    COALESCE(SUM(s.advertising), 0) AS advertising,
+                    COALESCE(SUM(s.unit_expenses), 0) AS unit_expenses,
+                    COALESCE(SUM(s.general_expenses), 0) AS general_expenses,
+                    COALESCE(SUM(s.external_expenses), 0) AS external_expenses,
+                    COALESCE(SUM(s.operating_before_ads_tax), 0) AS operating_before_ads_tax,
+                    COALESCE(SUM(s.profit_before_ads), 0) AS profit_before_ads,
+                    COALESCE(SUM(s.profit_before_tax), 0) AS profit_before_tax,
+                    COALESCE(SUM(s.profit), 0) AS profit,
+                    CASE WHEN ABS(COALESCE(SUM(s.revenue), 0)) > 0.000001
+                         THEN COALESCE(SUM(s.profit), 0) / SUM(s.revenue) ELSE 0 END AS margin,
+                    CASE WHEN ABS(COALESCE(SUM(s.revenue), 0)) > 0.000001
+                         THEN COALESCE(SUM(s.advertising), 0) / SUM(s.revenue) ELSE 0 END AS drr
+                FROM sku_snapshots s
+                JOIN report_snapshots r ON r.id = s.report_id
+                {where_sql}
+                GROUP BY s.sku
+                ORDER BY profit DESC, revenue DESC, s.sku ASC
+                LIMIT %s
+                """,
+                tuple(params),
+            )
+            return [ProductSummaryRow(**dict(row)) for row in cursor.fetchall()]
+
+
+def get_product_summary(
+    sku: str,
+    *,
+    period_type: str | None = "weekly",
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> ProductSummaryRow | None:
+    where_sql, params = _product_filter_sql(
+        period_type=period_type,
+        date_from=date_from,
+        date_to=date_to,
+        exact_sku=sku,
+    )
+    with _connect() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                f"""
+                SELECT
+                    MIN(s.sku) AS sku,
+                    MAX(s.nm_id) AS nm_id,
+                    COALESCE(MAX(NULLIF(s.name, '')), MIN(s.sku)) AS name,
+                    COUNT(DISTINCT r.id)::INTEGER AS periods,
+                    MIN(r.period_start) AS first_period,
+                    MAX(r.period_end) AS last_period,
+                    COALESCE(SUM(s.units), 0) AS units,
+                    COALESCE(SUM(s.revenue), 0) AS revenue,
+                    COALESCE(SUM(s.payout), 0) AS payout,
+                    COALESCE(SUM(s.cogs), 0) AS cogs,
+                    COALESCE(SUM(s.tax), 0) AS tax,
+                    COALESCE(SUM(s.advertising), 0) AS advertising,
+                    COALESCE(SUM(s.unit_expenses), 0) AS unit_expenses,
+                    COALESCE(SUM(s.general_expenses), 0) AS general_expenses,
+                    COALESCE(SUM(s.external_expenses), 0) AS external_expenses,
+                    COALESCE(SUM(s.operating_before_ads_tax), 0) AS operating_before_ads_tax,
+                    COALESCE(SUM(s.profit_before_ads), 0) AS profit_before_ads,
+                    COALESCE(SUM(s.profit_before_tax), 0) AS profit_before_tax,
+                    COALESCE(SUM(s.profit), 0) AS profit,
+                    CASE WHEN ABS(COALESCE(SUM(s.revenue), 0)) > 0.000001
+                         THEN COALESCE(SUM(s.profit), 0) / SUM(s.revenue) ELSE 0 END AS margin,
+                    CASE WHEN ABS(COALESCE(SUM(s.revenue), 0)) > 0.000001
+                         THEN COALESCE(SUM(s.advertising), 0) / SUM(s.revenue) ELSE 0 END AS drr
+                FROM sku_snapshots s
+                JOIN report_snapshots r ON r.id = s.report_id
+                {where_sql}
+                HAVING COUNT(*) > 0
+                """,
+                tuple(params),
+            )
+            row = cursor.fetchone()
+            return ProductSummaryRow(**dict(row)) if row else None
+
+
+def list_product_periods(
+    sku: str,
+    limit: int = 500,
+    *,
+    period_type: str | None = "weekly",
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> list[ProductPeriodRow]:
+    limit = max(1, min(int(limit), 1000))
+    where_sql, params = _product_filter_sql(
+        period_type=period_type,
+        date_from=date_from,
+        date_to=date_to,
+        exact_sku=sku,
+    )
+    params.append(limit)
+    with _connect() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                f"""
+                SELECT
+                    r.id AS report_id, r.period_start, r.period_end, r.period_type,
+                    s.units, s.revenue, s.payout, s.cogs, s.tax, s.advertising,
+                    s.unit_expenses, s.general_expenses, s.external_expenses,
+                    s.operating_before_ads_tax, s.profit_before_ads,
+                    s.profit_before_tax, s.profit, s.margin, s.drr
+                FROM sku_snapshots s
+                JOIN report_snapshots r ON r.id = s.report_id
+                {where_sql}
+                ORDER BY r.period_start ASC, r.period_end ASC, r.created_at ASC
+                LIMIT %s
+                """,
+                tuple(params),
+            )
+            return [ProductPeriodRow(**dict(row)) for row in cursor.fetchall()]
+

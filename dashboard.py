@@ -15,8 +15,11 @@ from waitress import serve
 from wb_db import (
     database_enabled,
     get_dashboard_report,
+    get_product_summary,
     list_dashboard_reports,
     list_dashboard_skus,
+    list_product_periods,
+    list_product_summaries,
 )
 from wb_management import (
     delete_cost_profile,
@@ -45,7 +48,7 @@ BASE_STYLE = r"""
 .nav{display:flex;gap:9px;flex-wrap:wrap;margin:0 0 18px}.nav a{color:var(--text);text-decoration:none;padding:10px 13px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025);font-size:14px;font-weight:650}.nav a.active,.nav a:hover{background:linear-gradient(135deg,rgba(157,78,221,.42),rgba(224,64,251,.25));border-color:rgba(199,125,255,.45)}
 .filters,.form-grid{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}select,input,textarea,button{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:12px;padding:10px 12px;font-size:14px}textarea{min-height:82px;resize:vertical}input::placeholder,textarea::placeholder{color:#747d90}button,.button{cursor:pointer;background:linear-gradient(135deg,var(--accent),var(--accent2));border:0;font-weight:750;color:white;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}.button.secondary,button.secondary{background:rgba(255,255,255,.06);border:1px solid var(--line)}button.danger{background:rgba(255,102,120,.15);color:#ff9aa7;border:1px solid rgba(255,102,120,.3)}
 .grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}.card{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.015));border:1px solid var(--line);border-radius:18px;padding:17px;min-width:0}.label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}.value{margin-top:9px;font-size:clamp(19px,2.3vw,29px);font-weight:800;letter-spacing:-.035em;overflow-wrap:anywhere}.value.good{color:var(--good)}.value.bad{color:var(--bad)}.value.warn{color:var(--warn)}.section{margin-top:16px}.section-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}h2{margin:0;font-size:20px}h3{margin:0 0 12px;font-size:17px}.chart-box{height:360px}.two-col{display:grid;grid-template-columns:1.35fr .65fr;gap:16px}.admin-cols{display:grid;grid-template-columns:minmax(310px,.72fr) minmax(0,1.28fr);gap:16px}.table-wrap{overflow:auto;border-radius:14px}
-table{width:100%;border-collapse:collapse;min-width:1050px}th,td{padding:11px 10px;border-bottom:1px solid var(--line);text-align:right;font-size:12.5px;white-space:nowrap}th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--panel)}th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}tr:last-child td{border-bottom:0}.profit-pos{color:var(--good);font-weight:700}.profit-neg{color:var(--bad);font-weight:700}.muted{color:var(--muted)}.empty{padding:40px 20px;text-align:center;color:var(--muted)}.period-link,.text-link{color:var(--text);text-decoration:none;font-weight:650}.period-link:hover,.text-link:hover{color:#d6a7ff}.hint{margin-top:12px;padding:12px 14px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:12px;line-height:1.5}.notice{margin-bottom:14px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);font-size:13px}.notice.ok{background:rgba(61,220,151,.10);border-color:rgba(61,220,151,.28);color:#9af0c9}.notice.error{background:rgba(255,102,120,.10);border-color:rgba(255,102,120,.28);color:#ffadb7}.field{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}.field label{color:var(--muted);font-size:12px}.field input,.field textarea,.field select{width:100%}.form-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}.inline-actions{display:flex;gap:7px;justify-content:flex-end}.inline-actions form{margin:0}.small{font-size:11px;padding:7px 9px;border-radius:9px}.summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}.summary span{padding:8px 11px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--muted);font-size:12px}footer{color:var(--muted);font-size:12px;text-align:center;padding:28px 0 10px}
+table{width:100%;border-collapse:collapse;min-width:1050px}th,td{padding:11px 10px;border-bottom:1px solid var(--line);text-align:right;font-size:12.5px;white-space:nowrap}th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--panel)}th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}tr:last-child td{border-bottom:0}.profit-pos{color:var(--good);font-weight:700}.profit-neg{color:var(--bad);font-weight:700}.muted{color:var(--muted)}.empty{padding:40px 20px;text-align:center;color:var(--muted)}.period-link,.text-link{color:var(--text);text-decoration:none;font-weight:650}.period-link:hover,.text-link:hover{color:#d6a7ff}.hint{margin-top:12px;padding:12px 14px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:12px;line-height:1.5}.notice{margin-bottom:14px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);font-size:13px}.notice.ok{background:rgba(61,220,151,.10);border-color:rgba(61,220,151,.28);color:#9af0c9}.notice.error{background:rgba(255,102,120,.10);border-color:rgba(255,102,120,.28);color:#ffadb7}.field{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}.field label{color:var(--muted);font-size:12px}.field input,.field textarea,.field select{width:100%}.form-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}.inline-actions{display:flex;gap:7px;justify-content:flex-end}.inline-actions form{margin:0}.small{font-size:11px;padding:7px 9px;border-radius:9px}.summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}.summary span{padding:8px 11px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--muted);font-size:12px}.product-title{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.sku-chip{display:inline-flex;padding:7px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted);font-size:12px}.rank-good{color:var(--good);font-weight:750}.rank-bad{color:var(--bad);font-weight:750}.filters label{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}.filters label input,.filters label select{min-width:145px}footer{color:var(--muted);font-size:12px;text-align:center;padding:28px 0 10px}
 @media(max-width:1150px){.grid{grid-template-columns:repeat(3,1fr)}.two-col,.admin-cols{grid-template-columns:1fr}}@media(max-width:650px){.wrap{padding:16px}header{align-items:flex-start;flex-direction:column}.grid{grid-template-columns:repeat(2,1fr)}.card{padding:14px}.chart-box{height:300px}.form-grid>*{width:100%}}
 </style>
 """
@@ -54,22 +57,49 @@ table{width:100%;border-collapse:collapse;min-width:1050px}th,td{padding:11px 10
 DASHBOARD_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>{{ title }}</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>{{ title }}</h1><div class="subtitle">Финансы Wildberries · история себестоимости · внешний P&amp;L</div></div><div class="badge">Последнее сохранение: {{ latest_created }}</div></header>
-<nav class="nav"><a class="active" href="/">Дашборд</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a class="active" href="/">Дашборд</a><a href="/products">Товары</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><select name="period_type" aria-label="Тип периода"><option value="" {% if not selected_type %}selected{% endif %}>Все сохранённые периоды</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Загруженные Excel</option></select><button type="submit">Показать</button></form>
 {% if latest %}<div class="grid">
 <div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(latest.revenue) }}</div></div><div class="card"><div class="label">Расчётная выплата</div><div class="value">{{ money(latest.payout) }}</div></div><div class="card"><div class="label">Прибыль до налога</div><div class="value {{ 'good' if latest.profit_before_tax >= 0 else 'bad' }}">{{ money(latest.profit_before_tax) }}</div></div><div class="card"><div class="label">УСН 6%</div><div class="value">{{ money(latest.tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if latest.profit >= 0 else 'bad' }}">{{ money(latest.profit) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(latest.cogs) }}</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(latest.external_expenses) }}</div></div><div class="card"><div class="label">Реклама WB</div><div class="value">{{ money(latest.advertising) }}</div></div><div class="card"><div class="label">ДРР / Маржа</div><div class="value {{ margin_class(latest.margin) }}">{{ percent(latest.drr) }} / {{ percent(latest.margin) }}</div></div><div class="card"><div class="label">Продано</div><div class="value">{{ units(latest.units) }} шт.</div></div></div>
 <div class="section card"><div class="section-head"><div><h2>Динамика сохранённых отчётов</h2><div class="subtitle">Доход, прибыль до налога и чистая прибыль</div></div></div><div class="chart-box"><canvas id="trendChart"></canvas></div></div>
-<div class="section two-col"><div class="card"><div class="section-head"><h2>Товары выбранного периода</h2><span class="muted">{{ latest_period }}</span></div><div class="table-wrap"><table><thead><tr><th>Товар</th><th>Артикул</th><th>Шт.</th><th>Доход</th><th>Себес.</th><th>Внешние</th><th>Реклама</th><th>До налога</th><th>УСН</th><th>Чистая</th><th>Маржа</th></tr></thead><tbody>{% for row in skus %}<tr><td>{{ row.name or row.sku }}</td><td class="muted">{{ row.sku }}</td><td>{{ units(row.units) }}</td><td>{{ money(row.revenue) }}</td><td>{{ money(row.cogs) }}</td><td>{{ money(row.external_expenses) }}</td><td>{{ money(row.advertising) }}</td><td class="{{ 'profit-pos' if row.profit_before_tax >= 0 else 'profit-neg' }}">{{ money(row.profit_before_tax) }}</td><td>{{ money(row.tax) }}</td><td class="{{ 'profit-pos' if row.profit >= 0 else 'profit-neg' }}">{{ money(row.profit) }}</td><td>{{ percent(row.margin) }}</td></tr>{% else %}<tr><td colspan="11" class="empty">В этом отчёте нет строк по товарам.</td></tr>{% endfor %}</tbody></table></div><div class="hint">Себестоимость и внешние расходы теперь редактируются прямо в разделе <b>«Себестоимость и расходы»</b>. После изменения прошлые отчёты пересчитываются командой <b>/backfill ДД.ММ.ГГГГ</b>.</div></div>
+<div class="section two-col"><div class="card"><div class="section-head"><h2>Товары выбранного периода</h2><span class="muted">{{ latest_period }}</span></div><div class="table-wrap"><table><thead><tr><th>Товар</th><th>Артикул</th><th>Шт.</th><th>Доход</th><th>Себес.</th><th>Внешние</th><th>Реклама</th><th>До налога</th><th>УСН</th><th>Чистая</th><th>Маржа</th></tr></thead><tbody>{% for row in skus %}<tr><td><a class="text-link" href="{{ url_for('product_detail', sku=row.sku, period_type=latest.period_type) }}">{{ row.name or row.sku }}</a></td><td class="muted">{{ row.sku }}</td><td>{{ units(row.units) }}</td><td>{{ money(row.revenue) }}</td><td>{{ money(row.cogs) }}</td><td>{{ money(row.external_expenses) }}</td><td>{{ money(row.advertising) }}</td><td class="{{ 'profit-pos' if row.profit_before_tax >= 0 else 'profit-neg' }}">{{ money(row.profit_before_tax) }}</td><td>{{ money(row.tax) }}</td><td class="{{ 'profit-pos' if row.profit >= 0 else 'profit-neg' }}">{{ money(row.profit) }}</td><td>{{ percent(row.margin) }}</td></tr>{% else %}<tr><td colspan="11" class="empty">В этом отчёте нет строк по товарам.</td></tr>{% endfor %}</tbody></table></div><div class="hint">Себестоимость и внешние расходы теперь редактируются прямо в разделе <b>«Себестоимость и расходы»</b>. После изменения прошлые отчёты пересчитываются командой <b>/backfill ДД.ММ.ГГГГ</b>.</div></div>
 <div class="card"><div class="section-head"><h2>Последние периоды</h2><span class="muted">Нажми на период</span></div><div class="table-wrap"><table style="min-width:760px"><thead><tr><th>Период</th><th>Тип</th><th>Доход</th><th>До налога</th><th>УСН</th><th>Чистая</th></tr></thead><tbody>{% for row in reports_desc %}<tr><td><a class="period-link" href="/?report_id={{ row.report_id }}{% if selected_type %}&period_type={{ selected_type }}{% endif %}">{{ period(row.period_start,row.period_end) }}</a></td><td class="muted">{{ type_label(row.period_type) }}</td><td>{{ money(row.revenue) }}</td><td class="{{ 'profit-pos' if row.profit_before_tax >= 0 else 'profit-neg' }}">{{ money(row.profit_before_tax) }}</td><td>{{ money(row.tax) }}</td><td class="{{ 'profit-pos' if row.profit >= 0 else 'profit-neg' }}">{{ money(row.profit) }}</td></tr>{% endfor %}</tbody></table></div></div></div>
 {% else %}<div class="card empty">В базе пока нет отчётов. Отправь боту <b>/yesterday</b>, <b>/week</b> или <b>/month</b>, затем обнови страницу.</div>{% endif %}<footer>WB Profit Dashboard · данные доступны только после авторизации</footer></div>
 {% if latest %}<script>const labels={{ chart_labels|tojson }},profit={{ chart_profit|tojson }},preTax={{ chart_pre_tax|tojson }},revenue={{ chart_revenue|tojson }};const canvas=document.getElementById('trendChart');if(window.Chart&&canvas){new Chart(canvas,{data:{labels,datasets:[{type:'bar',label:'Чистая прибыль',data:profit,borderWidth:0,borderRadius:6,backgroundColor:'rgba(61,220,151,.70)',yAxisID:'y'},{type:'line',label:'Прибыль до налога',data:preTax,borderColor:'#ffcc66',backgroundColor:'rgba(255,204,102,.08)',fill:false,tension:.28,pointRadius:3,yAxisID:'y'},{type:'line',label:'Доход покупателей',data:revenue,borderColor:'#c77dff',backgroundColor:'rgba(199,125,255,.14)',fill:true,tension:.28,pointRadius:3,yAxisID:'y1'}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:'#cbd2df'}}},scales:{x:{ticks:{color:'#9aa3b5',maxRotation:40,minRotation:0},grid:{color:'rgba(255,255,255,.05)'}},y:{position:'left',ticks:{color:'#9aa3b5'},grid:{color:'rgba(255,255,255,.05)'}},y1:{position:'right',ticks:{color:'#9aa3b5'},grid:{drawOnChartArea:false}}}}});}</script>{% endif %}</body></html>
 """
 
 
+
+PRODUCTS_TEMPLATE = r"""
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Товары · {{ title }}</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
+<header><div><h1>Аналитика по товарам</h1><div class="subtitle">Прибыль, маржа и ДРР каждого SKU за выбранные сохранённые периоды</div></div><div class="badge">Найдено товаров: {{ totals.products }}</div></header>
+<nav class="nav"><a href="/">Дашборд</a><a class="active" href="/products">Товары</a><a href="/admin">Себестоимость и расходы</a></nav>
+<form class="filters" method="get"><label>Периоды<select name="period_type"><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select></label><label>С даты<input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату<input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск<input name="q" value="{{ query }}" placeholder="Название, артикул или nmID"></label><button type="submit">Показать</button>{% if query or date_from_value or date_to_value %}<a class="button secondary" href="/products?period_type={{ selected_type }}">Сбросить</a>{% endif %}</form>
+<div class="hint">Чтобы суммы не задваивались, здесь одновременно используется только один тип периодов. По умолчанию выбраны закрытые недельные отчёты.</div>
+{% if rows %}<div class="grid section"><div class="card"><div class="label">Товаров</div><div class="value">{{ totals.products }}</div></div><div class="card"><div class="label">Продано</div><div class="value">{{ units(totals.units) }} шт.</div></div><div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(totals.revenue) }}</div></div><div class="card"><div class="label">Прибыль до налога</div><div class="value {{ 'good' if totals.profit_before_tax >= 0 else 'bad' }}">{{ money(totals.profit_before_tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if totals.profit >= 0 else 'bad' }}">{{ money(totals.profit) }}</div></div><div class="card"><div class="label">Маржа</div><div class="value {{ margin_class(totals.margin) }}">{{ percent(totals.margin) }}</div></div><div class="card"><div class="label">Реклама WB</div><div class="value">{{ money(totals.advertising) }}</div></div><div class="card"><div class="label">ДРР</div><div class="value">{{ percent(totals.drr) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(totals.cogs) }}</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(totals.external_expenses) }}</div></div></div>
+<div class="section card"><div class="section-head"><div><h2>Экономика товаров</h2><div class="subtitle">Нажми на товар, чтобы открыть его график и историю по периодам</div></div><span class="muted">{{ type_label(selected_type) }}</span></div><div class="table-wrap"><table style="min-width:1430px"><thead><tr><th>Товар</th><th>Артикул</th><th>Периодов</th><th>Шт.</th><th>Доход</th><th>Выплата</th><th>Себес.</th><th>Внешние</th><th>Реклама</th><th>До налога</th><th>УСН</th><th>Чистая</th><th>Прибыль / шт.</th><th>Маржа</th><th>ДРР</th><th>Последний период</th></tr></thead><tbody>{% for row in rows %}<tr><td><a class="text-link" href="{{ url_for('product_detail', sku=row.sku, period_type=selected_type, date_from=date_from_value, date_to=date_to_value) }}">{{ row.name or row.sku }}</a></td><td class="muted">{{ row.sku }}</td><td>{{ row.periods }}</td><td>{{ units(row.units) }}</td><td>{{ money(row.revenue) }}</td><td>{{ money(row.payout) }}</td><td>{{ money(row.cogs) }}</td><td>{{ money(row.external_expenses) }}</td><td>{{ money(row.advertising) }}</td><td class="{{ 'profit-pos' if row.profit_before_tax >= 0 else 'profit-neg' }}">{{ money(row.profit_before_tax) }}</td><td>{{ money(row.tax) }}</td><td class="{{ 'profit-pos' if row.profit >= 0 else 'profit-neg' }}">{{ money(row.profit) }}</td><td>{{ money(row.profit / row.units if row.units else 0) }}</td><td>{{ percent(row.margin) }}</td><td>{{ percent(row.drr) }}</td><td class="muted">{{ date_display(row.last_period) }}</td></tr>{% endfor %}</tbody></table></div></div>{% else %}<div class="card empty section">По выбранным фильтрам товары не найдены. Сначала сохрани отчёты через /week или /backfill.</div>{% endif %}
+<footer>WB Profit Dashboard · аналитика строится по сохранённым данным PostgreSQL</footer></div></body></html>
+"""
+
+
+PRODUCT_DETAIL_TEMPLATE = r"""
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>{{ summary.name }} · {{ title }}</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>""" + BASE_STYLE + r"""</head><body><div class="wrap">
+<header><div><div class="product-title"><h1>{{ summary.name or summary.sku }}</h1><span class="sku-chip">{{ summary.sku }}</span>{% if summary.nm_id %}<span class="sku-chip">nmID {{ summary.nm_id }}</span>{% endif %}</div><div class="subtitle">Юнит-экономика товара по сохранённым периодам</div></div><div class="badge">{{ period(summary.first_period, summary.last_period) }}</div></header>
+<nav class="nav"><a href="/">Дашборд</a><a class="active" href="/products?period_type={{ selected_type }}">Товары</a><a href="/admin">Себестоимость и расходы</a></nav>
+<form class="filters" method="get"><input type="hidden" name="sku" value="{{ summary.sku }}"><label>Периоды<select name="period_type"><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select></label><label>С даты<input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату<input type="date" name="date_to" value="{{ date_to_value }}"></label><button type="submit">Показать</button><a class="button secondary" href="/products?period_type={{ selected_type }}">К списку товаров</a></form>
+<div class="grid"><div class="card"><div class="label">Продано</div><div class="value">{{ units(summary.units) }} шт.</div></div><div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(summary.revenue) }}</div></div><div class="card"><div class="label">Расчётная выплата</div><div class="value">{{ money(summary.payout) }}</div></div><div class="card"><div class="label">Прибыль до налога</div><div class="value {{ 'good' if summary.profit_before_tax >= 0 else 'bad' }}">{{ money(summary.profit_before_tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if summary.profit >= 0 else 'bad' }}">{{ money(summary.profit) }}</div></div><div class="card"><div class="label">Прибыль / шт.</div><div class="value {{ 'good' if profit_per_unit >= 0 else 'bad' }}">{{ money(profit_per_unit) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(summary.cogs) }}</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(summary.external_expenses) }}</div></div><div class="card"><div class="label">Реклама / ДРР</div><div class="value">{{ money(summary.advertising) }} / {{ percent(summary.drr) }}</div></div><div class="card"><div class="label">Маржа</div><div class="value {{ margin_class(summary.margin) }}">{{ percent(summary.margin) }}</div></div></div>
+<div class="section card"><div class="section-head"><div><h2>Динамика товара</h2><div class="subtitle">Доход, прибыль до налога и чистая прибыль</div></div><span class="muted">{{ summary.periods }} периодов</span></div><div class="chart-box"><canvas id="productChart"></canvas></div></div>
+<div class="section two-col"><div class="card"><div class="section-head"><h2>История по периодам</h2><span class="muted">{{ type_label(selected_type) }}</span></div><div class="table-wrap"><table style="min-width:1250px"><thead><tr><th>Период</th><th>Шт.</th><th>Доход</th><th>Выплата</th><th>Себес.</th><th>Внешние</th><th>Реклама</th><th>До налога</th><th>УСН</th><th>Чистая</th><th>Маржа</th><th>ДРР</th></tr></thead><tbody>{% for row in periods %}<tr><td><a class="period-link" href="/?report_id={{ row.report_id }}&period_type={{ row.period_type }}">{{ period(row.period_start,row.period_end) }}</a></td><td>{{ units(row.units) }}</td><td>{{ money(row.revenue) }}</td><td>{{ money(row.payout) }}</td><td>{{ money(row.cogs) }}</td><td>{{ money(row.external_expenses) }}</td><td>{{ money(row.advertising) }}</td><td class="{{ 'profit-pos' if row.profit_before_tax >= 0 else 'profit-neg' }}">{{ money(row.profit_before_tax) }}</td><td>{{ money(row.tax) }}</td><td class="{{ 'profit-pos' if row.profit >= 0 else 'profit-neg' }}">{{ money(row.profit) }}</td><td>{{ percent(row.margin) }}</td><td>{{ percent(row.drr) }}</td></tr>{% endfor %}</tbody></table></div></div>
+<div class="card"><div class="section-head"><div><h2>История себестоимости</h2><div class="subtitle">Редактируется в разделе расходов</div></div><a class="button secondary small" href="/admin#cost-form">Добавить цену</a></div>{% if cost_profiles %}<div class="table-wrap"><table style="min-width:720px"><thead><tr><th>С даты</th><th>Себес.</th><th>Расходы / шт.</th><th>Всего / шт.</th></tr></thead><tbody>{% for row in cost_profiles %}<tr><td>{{ date_display(row.effective_from) }}</td><td>{{ money(row.unit_cost) }}</td><td>{{ money(row.fulfillment_per_unit + row.packaging_per_unit + row.warehouse_delivery_per_unit + row.other_per_unit) }}</td><td>{{ money(row.unit_cost + row.fulfillment_per_unit + row.packaging_per_unit + row.warehouse_delivery_per_unit + row.other_per_unit) }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty">Для этого артикула нет записи себестоимости.</div>{% endif %}<div class="hint">После изменения цены прошлые сохранённые периоды пересчитываются командой <b>/backfill ДД.ММ.ГГГГ</b>.</div></div></div>
+<script>const labels={{ chart_labels|tojson }};new Chart(document.getElementById('productChart'),{type:'line',data:{labels:labels,datasets:[{label:'Доход',data:{{ chart_revenue|tojson }},borderColor:'#d6a7ff',backgroundColor:'rgba(214,167,255,.10)',tension:.28,fill:false},{label:'Прибыль до налога',data:{{ chart_pre_tax|tojson }},borderColor:'#ffcc66',backgroundColor:'rgba(255,204,102,.10)',tension:.28,fill:false},{label:'Чистая прибыль',data:{{ chart_profit|tojson }},borderColor:'#3ddc97',backgroundColor:'rgba(61,220,151,.10)',tension:.28,fill:false}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:'#cbd2df'}}},scales:{x:{ticks:{color:'#929bad',maxRotation:45,minRotation:0},grid:{color:'rgba(255,255,255,.05)'}},y:{ticks:{color:'#929bad',callback:(v)=>new Intl.NumberFormat('ru-RU').format(v)+' ₽'},grid:{color:'rgba(255,255,255,.06)'}}}}});</script>
+<footer>WB Profit Dashboard · карточка товара</footer></div></body></html>
+"""
+
+
 ADMIN_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Управление данными · WB Profit</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Себестоимость и расходы</h1><div class="subtitle">Изменения сохраняются в PostgreSQL и не пропадают после перезапуска Railway</div></div><div class="badge">{{ cost_count }} профилей · {{ expense_count }} расходов</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a class="active" href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a class="active" href="/admin">Себестоимость и расходы</a></nav>
 {% if ok %}<div class="notice ok">✅ {{ ok }}</div>{% endif %}{% if error %}<div class="notice error">❌ {{ error }}</div>{% endif %}
 <div class="hint" style="margin:0 0 16px">Новая цена добавляется отдельной строкой с датой начала действия. Старую строку не меняй, если цена действительно изменилась позже. Новые отчёты сразу используют эти данные; для пересчёта истории запусти в Telegram <b>/backfill ДД.ММ.ГГГГ</b>.</div>
 <section class="section admin-cols">
@@ -107,7 +137,7 @@ def _auth_required() -> Response:
 
 def _csrf_token() -> str:
     secret = (_dashboard_password() + "|" + _dashboard_user()).encode("utf-8")
-    return hmac.new(secret, b"wb-profit-dashboard-v15", hashlib.sha256).hexdigest()
+    return hmac.new(secret, b"wb-profit-dashboard-v16", hashlib.sha256).hexdigest()
 
 
 def _valid_csrf() -> bool:
@@ -193,6 +223,17 @@ def _form_date(name: str) -> date:
     return datetime.strptime(raw, "%Y-%m-%d").date()
 
 
+
+def _query_date(name: str) -> date | None:
+    raw = request.args.get(name, "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
 def _admin_redirect(*, ok: str = "", error: str = "", anchor: str = ""):
     query = []
     if ok:
@@ -239,6 +280,112 @@ def dashboard():
         "margin_class": _margin_class,
     }
     return render_template_string(DASHBOARD_TEMPLATE, **context)
+
+
+
+@app.get("/products")
+def products():
+    if not database_enabled():
+        return Response("DATABASE_URL не задан.", 503, {"Content-Type": "text/plain; charset=utf-8"})
+    selected_type = request.args.get("period_type", "weekly").strip()
+    if selected_type not in {"weekly", "daily", "xlsx"}:
+        selected_type = "weekly"
+    date_from = _query_date("date_from")
+    date_to = _query_date("date_to")
+    query = request.args.get("q", "").strip()[:120]
+    rows = list_product_summaries(
+        1000,
+        period_type=selected_type,
+        date_from=date_from,
+        date_to=date_to,
+        query=query,
+    )
+    revenue = sum(row.revenue for row in rows)
+    profit = sum(row.profit for row in rows)
+    advertising = sum(row.advertising for row in rows)
+    totals = {
+        "products": len(rows),
+        "units": sum(row.units for row in rows),
+        "revenue": revenue,
+        "payout": sum(row.payout for row in rows),
+        "cogs": sum(row.cogs for row in rows),
+        "tax": sum(row.tax for row in rows),
+        "advertising": advertising,
+        "external_expenses": sum(row.external_expenses for row in rows),
+        "profit_before_tax": sum(row.profit_before_tax for row in rows),
+        "profit": profit,
+        "margin": profit / revenue if abs(revenue) > 0.000001 else 0,
+        "drr": advertising / revenue if abs(revenue) > 0.000001 else 0,
+    }
+    return render_template_string(
+        PRODUCTS_TEMPLATE,
+        title=os.getenv("DASHBOARD_TITLE", "WB Profit Dashboard").strip() or "WB Profit Dashboard",
+        rows=rows,
+        totals=totals,
+        selected_type=selected_type,
+        date_from_value=date_from.isoformat() if date_from else "",
+        date_to_value=date_to.isoformat() if date_to else "",
+        query=query,
+        money=_money,
+        percent=_percent,
+        units=_units,
+        type_label=_type_label,
+        margin_class=_margin_class,
+        date_display=_date_display,
+    )
+
+
+@app.get("/product")
+def product_detail():
+    if not database_enabled():
+        return Response("DATABASE_URL не задан.", 503, {"Content-Type": "text/plain; charset=utf-8"})
+    sku = request.args.get("sku", "").strip()
+    if not sku:
+        return redirect(url_for("products"), code=302)
+    selected_type = request.args.get("period_type", "weekly").strip()
+    if selected_type not in {"weekly", "daily", "xlsx"}:
+        selected_type = "weekly"
+    date_from = _query_date("date_from")
+    date_to = _query_date("date_to")
+    summary = get_product_summary(
+        sku,
+        period_type=selected_type,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    if summary is None:
+        return Response("Товар не найден в сохранённых отчётах.", 404, {"Content-Type": "text/plain; charset=utf-8"})
+    periods = list_product_periods(
+        summary.sku,
+        1000,
+        period_type=selected_type,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    sku_key = summary.sku.strip().casefold()
+    cost_profiles = [row for row in list_cost_profiles(limit=5000) if row.sku.strip().casefold() == sku_key]
+    return render_template_string(
+        PRODUCT_DETAIL_TEMPLATE,
+        title=os.getenv("DASHBOARD_TITLE", "WB Profit Dashboard").strip() or "WB Profit Dashboard",
+        summary=summary,
+        periods=periods,
+        cost_profiles=cost_profiles,
+        selected_type=selected_type,
+        date_from_value=date_from.isoformat() if date_from else "",
+        date_to_value=date_to.isoformat() if date_to else "",
+        profit_per_unit=summary.profit / summary.units if abs(summary.units) > 0.000001 else 0,
+        chart_labels=[_period(row.period_start, row.period_end) for row in periods],
+        chart_revenue=[round(row.revenue, 2) for row in periods],
+        chart_pre_tax=[round(row.profit_before_tax, 2) for row in periods],
+        chart_profit=[round(row.profit, 2) for row in periods],
+        money=_money,
+        percent=_percent,
+        units=_units,
+        period=_period,
+        type_label=_type_label,
+        margin_class=_margin_class,
+        date_display=_date_display,
+    )
 
 
 @app.get("/admin")
