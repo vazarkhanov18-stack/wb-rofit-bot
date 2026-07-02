@@ -12,6 +12,10 @@ BALANCE_URL = "https://finance-api.wildberries.ru/api/v1/account/balance"
 SALES_REPORT_URL = "https://finance-api.wildberries.ru/api/finance/v1/sales-reports/detailed"
 CAMPAIGNS_URL = "https://advert-api.wildberries.ru/adv/v1/promotion/count"
 CAMPAIGN_STATS_URL = "https://advert-api.wildberries.ru/adv/v3/fullstats"
+PRODUCT_CARDS_URL = "https://content-api.wildberries.ru/content/v2/get/cards/list"
+WB_WAREHOUSE_STOCKS_URL = "https://seller-analytics-api.wildberries.ru/api/analytics/v1/stocks-report/wb-warehouses"
+SELLER_WAREHOUSES_URL = "https://marketplace-api.wildberries.ru/api/v3/warehouses"
+SELLER_STOCKS_URL = "https://marketplace-api.wildberries.ru/api/v3/stocks/{warehouse_id}"
 
 
 class WbApiError(RuntimeError):
@@ -23,6 +27,22 @@ class WbBalance:
     currency: str
     current: float
     for_withdraw: float
+
+
+
+
+@dataclass(frozen=True)
+class ProductCard:
+    nm_id: int
+    vendor_code: str
+    title: str
+    chrt_ids: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class SellerWarehouse:
+    warehouse_id: int
+    name: str
 
 
 @dataclass(frozen=True)
@@ -57,7 +77,7 @@ def _headers(token: str) -> dict[str, str]:
         "Authorization": token,
         "Accept": "application/json",
         "Content-Type": "application/json",
-        "User-Agent": "WB-Profit-Bot/5.0",
+        "User-Agent": "WB-Profit-Bot/9.0",
     }
 
 
@@ -423,3 +443,221 @@ async def get_advertising_stats(
         unallocated=unallocated,
         campaign_count=len(campaign_ids),
     )
+
+
+async def get_product_cards(token: str) -> list[ProductCard]:
+    """Получает все карточки товаров и их chrtId для сопоставления остатков."""
+    cards: list[ProductCard] = []
+    cursor: dict[str, Any] = {"limit": 100}
+    page = 0
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        while True:
+            page += 1
+            if page > 1000:
+                raise WbApiError("Слишком много страниц карточек товаров. Остановил загрузку для безопасности.")
+            body = {
+                "settings": {
+                    "sort": {"ascending": True},
+                    "filter": {"withPhoto": -1},
+                    "cursor": cursor,
+                }
+            }
+            try:
+                response = await client.post(
+                    PRODUCT_CARDS_URL,
+                    headers=_headers(token),
+                    params={"locale": "ru"},
+                    json=body,
+                )
+            except httpx.TimeoutException as exc:
+                raise WbApiError("WB долго загружает список карточек товаров.") from exc
+            except httpx.HTTPError as exc:
+                raise WbApiError("Не удалось соединиться с API карточек WB.") from exc
+
+            if response.status_code >= 400:
+                raise _error_from_response(
+                    response,
+                    "получение карточек товаров",
+                    category="Продвижение",
+                )
+            try:
+                payload = response.json()
+            except ValueError as exc:
+                raise WbApiError("WB вернул карточки товаров в неизвестном формате.") from exc
+            if not isinstance(payload, dict):
+                raise WbApiError("WB вернул неожиданный формат карточек товаров.")
+
+            raw_cards = payload.get("cards") or []
+            if not isinstance(raw_cards, list):
+                raise WbApiError("WB вернул неожиданный список карточек товаров.")
+
+            for raw in raw_cards:
+                if not isinstance(raw, dict):
+                    continue
+                nm_id = _as_int(raw.get("nmID") or raw.get("nmId"))
+                if not nm_id:
+                    continue
+                chrt_ids: list[int] = []
+                sizes = raw.get("sizes") or []
+                if isinstance(sizes, list):
+                    for size in sizes:
+                        if not isinstance(size, dict):
+                            continue
+                        chrt_id = _as_int(size.get("chrtID") or size.get("chrtId"))
+                        if chrt_id:
+                            chrt_ids.append(chrt_id)
+                cards.append(
+                    ProductCard(
+                        nm_id=nm_id,
+                        vendor_code=str(raw.get("vendorCode") or "").strip(),
+                        title=str(raw.get("title") or "").strip(),
+                        chrt_ids=tuple(sorted(set(chrt_ids))),
+                    )
+                )
+
+            response_cursor = payload.get("cursor") or {}
+            total = _as_int(response_cursor.get("total")) or 0
+            if total < int(cursor.get("limit", 100)):
+                break
+            updated_at = response_cursor.get("updatedAt")
+            nm_id = response_cursor.get("nmID") or response_cursor.get("nmId")
+            if not updated_at or not nm_id:
+                break
+            cursor = {"limit": 100, "updatedAt": updated_at, "nmID": nm_id}
+            await asyncio.sleep(0.65)
+
+    return cards
+
+
+async def get_wb_warehouse_stocks(token: str) -> list[dict[str, Any]]:
+    """Текущие остатки на складах WB (FBW)."""
+    rows: list[dict[str, Any]] = []
+    limit = 250000
+    offset = 0
+
+    async with httpx.AsyncClient(timeout=90.0) as client:
+        while True:
+            body = {"nmIds": [], "chrtIds": [], "limit": limit, "offset": offset}
+            try:
+                response = await client.post(
+                    WB_WAREHOUSE_STOCKS_URL,
+                    headers=_headers(token),
+                    json=body,
+                )
+            except httpx.TimeoutException as exc:
+                raise WbApiError("WB долго загружает остатки на своих складах.") from exc
+            except httpx.HTTPError as exc:
+                raise WbApiError("Не удалось соединиться с API остатков на складах WB.") from exc
+
+            if response.status_code >= 400:
+                raise _error_from_response(
+                    response,
+                    "получение остатков на складах WB",
+                    category="Аналитика",
+                )
+            try:
+                payload = response.json()
+            except ValueError as exc:
+                raise WbApiError("WB вернул остатки на своих складах в неизвестном формате.") from exc
+            data = payload.get("data") if isinstance(payload, dict) else None
+            items = data.get("items") if isinstance(data, dict) else None
+            if not isinstance(items, list):
+                raise WbApiError("WB вернул неожиданный формат остатков на своих складах.")
+            batch = [item for item in items if isinstance(item, dict)]
+            rows.extend(batch)
+            if len(batch) < limit:
+                break
+            offset += limit
+            await asyncio.sleep(20.5)
+
+    return rows
+
+
+async def get_seller_warehouses(token: str) -> list[SellerWarehouse]:
+    """Список складов продавца для FBS/DBW/DBS."""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(SELLER_WAREHOUSES_URL, headers=_headers(token))
+    except httpx.TimeoutException as exc:
+        raise WbApiError("WB долго загружает список складов продавца.") from exc
+    except httpx.HTTPError as exc:
+        raise WbApiError("Не удалось соединиться с API складов продавца.") from exc
+
+    if response.status_code >= 400:
+        raise _error_from_response(
+            response,
+            "получение складов продавца",
+            category="Маркетплейс",
+        )
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise WbApiError("WB вернул список складов продавца в неизвестном формате.") from exc
+    if not isinstance(payload, list):
+        raise WbApiError("WB вернул неожиданный формат списка складов продавца.")
+
+    result: list[SellerWarehouse] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        warehouse_id = _as_int(item.get("id"))
+        if not warehouse_id:
+            continue
+        result.append(
+            SellerWarehouse(
+                warehouse_id=warehouse_id,
+                name=str(item.get("name") or f"Склад {warehouse_id}").strip(),
+            )
+        )
+    return result
+
+
+async def get_seller_warehouse_stocks(
+    token: str,
+    warehouse_id: int,
+    chrt_ids: list[int],
+) -> dict[int, int]:
+    """Остатки по chrtId на одном складе продавца."""
+    result: dict[int, int] = {}
+    if not chrt_ids:
+        return result
+
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        for index, chunk in enumerate(_chunks(chrt_ids, 1000)):
+            if index:
+                await asyncio.sleep(0.25)
+            try:
+                response = await client.post(
+                    SELLER_STOCKS_URL.format(warehouse_id=warehouse_id),
+                    headers=_headers(token),
+                    json={"chrtIds": chunk},
+                )
+            except httpx.TimeoutException as exc:
+                raise WbApiError("WB долго загружает остатки на складе продавца.") from exc
+            except httpx.HTTPError as exc:
+                raise WbApiError("Не удалось соединиться с API остатков склада продавца.") from exc
+
+            if response.status_code >= 400:
+                raise _error_from_response(
+                    response,
+                    "получение остатков на складе продавца",
+                    category="Маркетплейс",
+                )
+            try:
+                payload = response.json()
+            except ValueError as exc:
+                raise WbApiError("WB вернул остатки склада продавца в неизвестном формате.") from exc
+            stocks = payload.get("stocks") if isinstance(payload, dict) else None
+            if not isinstance(stocks, list):
+                raise WbApiError("WB вернул неожиданный формат остатков склада продавца.")
+            for stock in stocks:
+                if not isinstance(stock, dict):
+                    continue
+                chrt_id = _as_int(stock.get("chrtId") or stock.get("chrtID"))
+                if not chrt_id:
+                    continue
+                amount = int(max(0, _as_float(stock.get("amount"))))
+                result[chrt_id] = amount
+
+    return result

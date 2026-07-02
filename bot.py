@@ -12,9 +12,19 @@ from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
-from wb_api import WbApiError, get_advertising_stats, get_balance, get_sales_report
+from wb_api import (
+    WbApiError,
+    get_advertising_stats,
+    get_balance,
+    get_product_cards,
+    get_sales_report,
+    get_seller_warehouse_stocks,
+    get_seller_warehouses,
+    get_wb_warehouse_stocks,
+)
 from wb_api_profit import analyze_api_report, apply_advertising
 from wb_profit import ReportResult, analyze_report, build_messages, format_money, format_period, format_units
+from wb_stock import build_inventory_snapshot, build_stock_messages, build_supply_messages
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -103,6 +113,18 @@ def configured_percent(variable: str, default: float) -> float:
         logger.warning("Неверный %s=%s. Использую %.1f.", variable, raw, default)
         return default
 
+
+def configured_int(variable: str, default: int, *, minimum: int = 1, maximum: int = 365) -> int:
+    raw = os.getenv(variable, str(default)).strip()
+    try:
+        value = int(raw)
+        if not (minimum <= value <= maximum):
+            raise ValueError
+        return value
+    except ValueError:
+        logger.warning("Неверный %s=%s. Использую %d.", variable, raw, default)
+        return default
+
 def is_allowed(update: Update) -> bool:
     allowed = allowed_user_id()
     user = update.effective_user
@@ -167,6 +189,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/month — текущий месяц по вчерашний день.\n"
         "/report 04.05.2026 10.05.2026 — свой период.\n"
         "/balance — проверить подключение и баланс кабинета.\n"
+        "/stocks — текущие остатки FBW и FBS.\n"
+        "/supply — прогноз, на сколько дней хватит товара и сколько поставить.\n"
         "/schedule — статус автоматических отчётов.\n"
         "/id — показать твой Telegram ID.\n\n"
         "Также можно по-прежнему прислать детализацию WB файлом .xlsx."
@@ -572,6 +596,143 @@ async def custom_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     )
 
 
+async def calculate_inventory_snapshot(
+    token: str,
+    *,
+    include_sales: bool,
+    status=None,
+):
+    if status is not None:
+        await status.edit_text("Загружаю карточки и текущие остатки WB…")
+
+    cards, wb_rows = await asyncio.gather(
+        get_product_cards(token),
+        get_wb_warehouse_stocks(token),
+    )
+
+    fbs_by_chrt: dict[int, int] = {}
+    seller_warehouses = []
+    fbs_warning = ""
+    try:
+        seller_warehouses = await get_seller_warehouses(token)
+        all_chrt_ids = sorted(
+            {chrt_id for card in cards for chrt_id in card.chrt_ids}
+        )
+        for warehouse in seller_warehouses:
+            warehouse_stocks = await get_seller_warehouse_stocks(
+                token,
+                warehouse.warehouse_id,
+                all_chrt_ids,
+            )
+            for chrt_id, amount in warehouse_stocks.items():
+                fbs_by_chrt[chrt_id] = fbs_by_chrt.get(chrt_id, 0) + amount
+    except WbApiError as exc:
+        fbs_warning = str(exc)
+        logger.warning("FBS-остатки не загружены: %s", exc)
+
+    sales_result = None
+    sales_window_days = configured_int("STOCK_SALES_WINDOW_DAYS", 28, minimum=7, maximum=63)
+    if include_sales:
+        today = datetime.now(configured_timezone()).date()
+        sales_end = today - timedelta(days=1)
+        sales_start = sales_end - timedelta(days=sales_window_days - 1)
+        if status is not None:
+            await status.edit_text(
+                "Остатки получены. Загружаю продажи за "
+                f"{sales_start.strftime('%d.%m.%Y')}–{sales_end.strftime('%d.%m.%Y')}…"
+            )
+        rows = await get_sales_report_throttled(
+            token,
+            sales_start,
+            sales_end,
+            period="daily",
+        )
+        sales_result = await asyncio.to_thread(
+            analyze_api_report,
+            rows,
+            COSTS_FILE,
+            sales_start,
+            sales_end,
+        )
+
+    return build_inventory_snapshot(
+        as_of=datetime.now(configured_timezone()).date(),
+        cards=cards,
+        wb_stock_rows=wb_rows,
+        fbs_by_chrt=fbs_by_chrt,
+        seller_warehouses=seller_warehouses,
+        sales_result=sales_result,
+        sales_window_days=sales_window_days,
+        fbs_warning=fbs_warning,
+    )
+
+
+async def stocks_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await reject_if_not_allowed(update):
+        return
+    message = update.effective_message
+    if not message:
+        return
+    token = os.getenv("WB_API_TOKEN", "").strip()
+    status = await message.reply_text("Загружаю текущие остатки WB…")
+    try:
+        snapshot = await calculate_inventory_snapshot(
+            token,
+            include_sales=False,
+            status=status,
+        )
+        messages = build_stock_messages(snapshot)
+        await status.edit_text(messages[0])
+        for text in messages[1:]:
+            await message.reply_text(text)
+    except WbApiError as exc:
+        await status.edit_text(f"❌ Не удалось получить остатки WB.\n\n{exc}")
+    except Exception as exc:
+        logger.exception("Ошибка отчёта по остаткам")
+        await status.edit_text(
+            "❌ Не смог построить отчёт по остаткам.\n"
+            f"Техническая ошибка: {type(exc).__name__}: {exc}"
+        )
+
+
+async def supply_forecast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await reject_if_not_allowed(update):
+        return
+    message = update.effective_message
+    if not message:
+        return
+    token = os.getenv("WB_API_TOKEN", "").strip()
+    status = await message.reply_text(
+        "Собираю остатки и продажи для прогноза поставки. Это может занять около минуты…"
+    )
+    try:
+        snapshot = await calculate_inventory_snapshot(
+            token,
+            include_sales=True,
+            status=status,
+        )
+        low_days = configured_int("STOCK_LOW_DAYS", 14, minimum=1, maximum=180)
+        target_days = configured_int("STOCK_TARGET_DAYS", 30, minimum=1, maximum=365)
+        if target_days < low_days:
+            target_days = low_days
+        messages = build_supply_messages(
+            snapshot,
+            low_days=low_days,
+            target_days=target_days,
+        )
+        await status.edit_text(messages[0])
+        for text in messages[1:]:
+            await message.reply_text(text)
+    except WbApiError as exc:
+        await status.edit_text(f"❌ Не удалось построить прогноз поставки.\n\n{exc}")
+    except Exception as exc:
+        logger.exception("Ошибка прогноза поставки")
+        await status.edit_text(
+            "❌ Не смог построить прогноз поставки.\n"
+            f"Техническая ошибка: {type(exc).__name__}: {exc}"
+        )
+
+
 async def schedule_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await reject_if_not_allowed(update):
         return
@@ -737,7 +898,7 @@ async def unknown_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
     if update.effective_message:
         await update.effective_message.reply_text(
-            "Используй /yesterday, /week, /compare, /month, /report, /schedule или пришли файл .xlsx."
+            "Используй /yesterday, /week, /compare, /month, /report, /stocks, /supply, /schedule или пришли файл .xlsx."
         )
 
 
@@ -756,11 +917,13 @@ def main() -> None:
     app.add_handler(CommandHandler("compare", compare_weeks))
     app.add_handler(CommandHandler("month", month_report))
     app.add_handler(CommandHandler("report", custom_report))
+    app.add_handler(CommandHandler("stocks", stocks_report))
+    app.add_handler(CommandHandler("supply", supply_forecast))
     app.add_handler(CommandHandler("schedule", schedule_status))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.ALL, unknown_message))
 
-    logger.info("WB Profit Bot v8 запущен")
+    logger.info("WB Profit Bot v9 запущен")
     app.run_polling(drop_pending_updates=True)
 
 
