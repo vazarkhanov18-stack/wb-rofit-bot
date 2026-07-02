@@ -23,6 +23,7 @@ from wb_api import (
     get_wb_warehouse_stocks,
 )
 from wb_api_profit import analyze_api_report, apply_advertising
+from wb_db import database_enabled, database_status, init_database, list_history, save_report
 from wb_profit import ReportResult, analyze_report, build_messages, format_money, format_period, format_units
 from wb_stock import (
     build_inventory_snapshot,
@@ -205,6 +206,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/stocks — текущие остатки FBW и FBS.\n"
         "/supply — прогноз, на сколько дней хватит товара и сколько поставить.\n"
         "/stockalerts — проверить товары с низким остатком.\n"
+        "/history — последние сохранённые финансовые периоды.\n"
+        "/dbstatus — проверить базу данных.\n"
         "/schedule — статус автоматических отчётов.\n"
         "/id — показать твой Telegram ID.\n\n"
         "Также можно по-прежнему прислать детализацию WB файлом .xlsx."
@@ -405,6 +408,102 @@ def build_weekly_comparison_message(current: ReportResult, previous: ReportResul
     return "\n".join(lines)
 
 
+async def save_report_safely(
+    result: ReportResult,
+    *,
+    period_type: str,
+    source: str = "api",
+) -> None:
+    if not database_enabled() or not result.active_items:
+        return
+    try:
+        await asyncio.to_thread(
+            save_report,
+            result,
+            period_type=period_type,
+            source=source,
+        )
+    except Exception:
+        logger.exception("Не удалось сохранить отчёт в PostgreSQL")
+
+
+def _history_type_label(value: str) -> str:
+    return {
+        "daily": "день/период",
+        "weekly": "неделя",
+        "xlsx": "Excel",
+    }.get(value, value)
+
+
+async def report_history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await reject_if_not_allowed(update):
+        return
+    message = update.effective_message
+    if not message:
+        return
+    if not database_enabled():
+        await message.reply_text(
+            "История пока не подключена: в Railway нет переменной DATABASE_URL."
+        )
+        return
+    try:
+        rows = await asyncio.to_thread(list_history, 10)
+        if not rows:
+            await message.reply_text(
+                "База подключена, но сохранённых отчётов ещё нет. "
+                "Запусти /yesterday, /week или /month."
+            )
+            return
+        lines = ["🗂 Последние сохранённые отчёты:"]
+        for row in rows:
+            period = format_period(row.period_start, row.period_end)
+            lines.extend(
+                [
+                    "",
+                    f"{period} · {_history_type_label(row.period_type)}",
+                    f"Продано: {format_units(row.units)} шт. | Доход: {format_money(row.revenue)}",
+                    f"Реклама: {format_money(row.advertising)} | ДРР: {row.drr * 100:.1f}%",
+                    f"Прибыль: {format_money(row.profit)} | Маржа: {row.margin * 100:.1f}%",
+                ]
+            )
+        await message.reply_text("\n".join(lines))
+    except Exception as exc:
+        logger.exception("Ошибка чтения истории PostgreSQL")
+        await message.reply_text(
+            "❌ Не удалось прочитать историю.\n"
+            f"Техническая ошибка: {type(exc).__name__}: {exc}"
+        )
+
+
+async def db_status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await reject_if_not_allowed(update):
+        return
+    message = update.effective_message
+    if not message:
+        return
+    if not database_enabled():
+        await message.reply_text("❌ DATABASE_URL не подключён к сервису бота.")
+        return
+    try:
+        count, last_saved = await asyncio.to_thread(database_status)
+        last_text = (
+            last_saved.astimezone(configured_timezone()).strftime("%d.%m.%Y %H:%M")
+            if last_saved
+            else "ещё нет"
+        )
+        await message.reply_text(
+            "✅ PostgreSQL подключён.\n"
+            f"Сохранено периодов: {count}.\n"
+            f"Последнее обновление: {last_text}."
+        )
+    except Exception as exc:
+        logger.exception("Ошибка проверки PostgreSQL")
+        await message.reply_text(
+            "❌ Не удалось подключиться к PostgreSQL.\n"
+            f"Техническая ошибка: {type(exc).__name__}: {exc}"
+        )
+
+
 async def send_api_report_to_chat(
     bot,
     chat_id: int,
@@ -449,6 +548,7 @@ async def send_api_report_to_chat(
                 )
             return
 
+        await save_report_safely(result, period_type=period, source="api")
         messages = build_messages(result)
         await status.edit_text(prefix + messages[0])
         for text in messages[1:]:
@@ -527,6 +627,8 @@ async def send_weekly_comparison_to_chat(
             previous_end,
             period="weekly",
         )
+        await save_report_safely(current, period_type="weekly", source="api")
+        await save_report_safely(previous, period_type="weekly", source="api")
         comparison = build_weekly_comparison_message(current, previous)
         await status.edit_text(prefix + comparison)
 
@@ -874,6 +976,18 @@ async def scheduled_stock_alert(context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.exception("Ошибка автоматического контроля остатков")
 
 
+async def initialize_application(application: Application) -> None:
+    if database_enabled():
+        try:
+            await asyncio.to_thread(init_database)
+            logger.info("PostgreSQL подключён, таблицы истории готовы.")
+        except Exception:
+            logger.exception("Не удалось инициализировать PostgreSQL. Бот продолжит работу без истории.")
+    else:
+        logger.info("DATABASE_URL не задан: история отчётов отключена.")
+    await configure_jobs(application)
+
+
 async def configure_jobs(application: Application) -> None:
     chat_id = allowed_user_id()
     if not chat_id:
@@ -990,6 +1104,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await telegram_file.download_to_drive(custom_path=temp_path)
 
         result = await asyncio.to_thread(analyze_report, temp_path, COSTS_FILE)
+        await save_report_safely(result, period_type="xlsx", source="telegram-xlsx")
         messages = build_messages(result)
         await status.edit_text(messages[0])
         for text in messages[1:]:
@@ -1010,7 +1125,7 @@ async def unknown_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
     if update.effective_message:
         await update.effective_message.reply_text(
-            "Используй /yesterday, /week, /compare, /month, /report, /stocks, /supply, /stockalerts, /schedule или пришли файл .xlsx."
+            "Используй /yesterday, /week, /compare, /month, /report, /stocks, /supply, /stockalerts, /history, /dbstatus, /schedule или пришли файл .xlsx."
         )
 
 
@@ -1019,7 +1134,7 @@ def main() -> None:
     if not token:
         raise RuntimeError("Не задана переменная BOT_TOKEN.")
 
-    app = Application.builder().token(token).post_init(configure_jobs).build()
+    app = Application.builder().token(token).post_init(initialize_application).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("id", show_id))
@@ -1032,11 +1147,13 @@ def main() -> None:
     app.add_handler(CommandHandler("stocks", stocks_report))
     app.add_handler(CommandHandler("supply", supply_forecast))
     app.add_handler(CommandHandler("stockalerts", stock_alerts))
+    app.add_handler(CommandHandler("history", report_history))
+    app.add_handler(CommandHandler("dbstatus", db_status_command))
     app.add_handler(CommandHandler("schedule", schedule_status))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.ALL, unknown_message))
 
-    logger.info("WB Profit Bot v10 запущен")
+    logger.info("WB Profit Bot v11 запущен")
     app.run_polling(drop_pending_updates=True)
 
 
