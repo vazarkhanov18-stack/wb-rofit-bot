@@ -14,7 +14,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 from wb_api import WbApiError, get_advertising_stats, get_balance, get_sales_report
 from wb_api_profit import analyze_api_report, apply_advertising
-from wb_profit import analyze_report, build_messages
+from wb_profit import ReportResult, analyze_report, build_messages, format_money, format_period, format_units
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -30,6 +30,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger("wb-profit-bot")
 
+FINANCE_MIN_INTERVAL_SECONDS = 62.0
+_finance_request_lock = asyncio.Lock()
+_last_finance_request_at = 0.0
+
 
 def allowed_user_id() -> int | None:
     raw = os.getenv("ALLOWED_USER_ID", "").strip()
@@ -42,9 +46,18 @@ def allowed_user_id() -> int | None:
         return None
 
 
-def auto_daily_enabled() -> bool:
-    raw = os.getenv("AUTO_DAILY_REPORT", "false").strip().lower()
+def env_flag(name: str, default: bool = False) -> bool:
+    raw_default = "true" if default else "false"
+    raw = os.getenv(name, raw_default).strip().lower()
     return raw in {"1", "true", "yes", "on", "да"}
+
+
+def auto_daily_enabled() -> bool:
+    return env_flag("AUTO_DAILY_REPORT")
+
+
+def auto_weekly_enabled() -> bool:
+    return env_flag("AUTO_WEEKLY_REPORT")
 
 
 def configured_timezone() -> ZoneInfo:
@@ -56,8 +69,8 @@ def configured_timezone() -> ZoneInfo:
         return MOSCOW_TZ
 
 
-def configured_daily_time() -> tuple[int, int]:
-    raw = os.getenv("DAILY_REPORT_TIME", "12:00").strip()
+def configured_time(variable: str, default: str) -> tuple[int, int]:
+    raw = os.getenv(variable, default).strip()
     try:
         hour_text, minute_text = raw.split(":", maxsplit=1)
         hour = int(hour_text)
@@ -66,9 +79,29 @@ def configured_daily_time() -> tuple[int, int]:
             raise ValueError
         return hour, minute
     except ValueError:
-        logger.warning("Неверный DAILY_REPORT_TIME=%s. Использую 12:00.", raw)
-        return 12, 0
+        logger.warning("Неверный %s=%s. Использую %s.", variable, raw, default)
+        hour_text, minute_text = default.split(":", maxsplit=1)
+        return int(hour_text), int(minute_text)
 
+
+def configured_daily_time() -> tuple[int, int]:
+    return configured_time("DAILY_REPORT_TIME", "12:00")
+
+
+def configured_weekly_time() -> tuple[int, int]:
+    return configured_time("WEEKLY_REPORT_TIME", "13:00")
+
+
+def configured_percent(variable: str, default: float) -> float:
+    raw = os.getenv(variable, str(default)).strip().replace(",", ".")
+    try:
+        value = float(raw)
+        if value < 0:
+            raise ValueError
+        return value
+    except ValueError:
+        logger.warning("Неверный %s=%s. Использую %.1f.", variable, raw, default)
+        return default
 
 def is_allowed(update: Update) -> bool:
     allowed = allowed_user_id()
@@ -88,6 +121,13 @@ def last_completed_week(today: date | None = None) -> tuple[date, date]:
     today = today or datetime.now(MOSCOW_TZ).date()
     current_monday = today - timedelta(days=today.weekday())
     end = current_monday - timedelta(days=1)
+    start = end - timedelta(days=6)
+    return start, end
+
+
+def previous_completed_week(today: date | None = None) -> tuple[date, date]:
+    current_start, _ = last_completed_week(today)
+    end = current_start - timedelta(days=1)
     start = end - timedelta(days=6)
     return start, end
 
@@ -123,10 +163,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Команды:\n"
         "/yesterday — отчёт за вчера.\n"
         "/week — последняя завершённая неделя.\n"
+        "/compare — сравнить две последние завершённые недели.\n"
         "/month — текущий месяц по вчерашний день.\n"
         "/report 04.05.2026 10.05.2026 — свой период.\n"
         "/balance — проверить подключение и баланс кабинета.\n"
-        "/schedule — статус автоматического ежедневного отчёта.\n"
+        "/schedule — статус автоматических отчётов.\n"
         "/id — показать твой Telegram ID.\n\n"
         "Также можно по-прежнему прислать детализацию WB файлом .xlsx."
     )
@@ -171,6 +212,161 @@ async def wb_balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         )
 
 
+async def get_sales_report_throttled(
+    token: str,
+    date_from: date,
+    date_to: date,
+    *,
+    period: str,
+) -> list[dict]:
+    """Не даёт двум финансовым запросам уйти в WB слишком близко друг к другу."""
+    global _last_finance_request_at
+    async with _finance_request_lock:
+        loop = asyncio.get_running_loop()
+        elapsed = loop.time() - _last_finance_request_at
+        wait_seconds = FINANCE_MIN_INTERVAL_SECONDS - elapsed
+        if _last_finance_request_at and wait_seconds > 0:
+            await asyncio.sleep(wait_seconds)
+        _last_finance_request_at = loop.time()
+        return await get_sales_report(token, date_from, date_to, period=period)
+
+
+async def calculate_api_result(
+    token: str,
+    date_from: date,
+    date_to: date,
+    *,
+    period: str,
+    status=None,
+    prefix: str = "",
+) -> ReportResult:
+    rows = await get_sales_report_throttled(
+        token,
+        date_from,
+        date_to,
+        period=period,
+    )
+    result = await asyncio.to_thread(
+        analyze_api_report,
+        rows,
+        COSTS_FILE,
+        date_from,
+        date_to,
+    )
+
+    if status is not None:
+        await status.edit_text(
+            prefix
+            + f"Финансовый отчёт получен. Загружаю рекламу за "
+            f"{date_from.strftime('%d.%m.%Y')}–{date_to.strftime('%d.%m.%Y')}…"
+        )
+    try:
+        ad_stats = await get_advertising_stats(token, date_from, date_to)
+        result = apply_advertising(result, ad_stats)
+    except WbApiError as ad_exc:
+        logger.warning("Не удалось загрузить рекламу WB: %s", ad_exc)
+        result.advertising_warning = str(ad_exc)
+    return result
+
+
+def _relative_change(current: float, previous: float) -> str:
+    if abs(previous) < 1e-9:
+        if abs(current) < 1e-9:
+            return "без изменений"
+        return "новое значение"
+    change = (current - previous) / abs(previous) * 100
+    arrow = "↑" if change > 0.05 else "↓" if change < -0.05 else "→"
+    return f"{arrow} {abs(change):.1f}%"
+
+
+def _percentage_points(current: float, previous: float) -> str:
+    change = (current - previous) * 100
+    arrow = "↑" if change > 0.05 else "↓" if change < -0.05 else "→"
+    return f"{arrow} {abs(change):.1f} п.п."
+
+
+def _short_label(value: str, limit: int = 42) -> str:
+    value = value.strip()
+    return value if len(value) <= limit else value[: limit - 1] + "…"
+
+
+def build_weekly_comparison_message(current: ReportResult, previous: ReportResult) -> str:
+    margin_limit = configured_percent("ALERT_MARGIN_PERCENT", 10.0) / 100
+    drr_limit = configured_percent("ALERT_DRR_PERCENT", 20.0) / 100
+
+    lines = [
+        f"📈 Сравнение недель {format_period(current.period_start, current.period_end)}",
+        f"с {format_period(previous.period_start, previous.period_end)}",
+        "",
+        f"Продано: {format_units(current.total_units)} шт. ({_relative_change(current.total_units, previous.total_units)})",
+        f"Доход: {format_money(current.total_revenue)} ({_relative_change(current.total_revenue, previous.total_revenue)})",
+        f"Реклама: {format_money(current.total_advertising)} ({_relative_change(current.total_advertising, previous.total_advertising)})",
+        f"ДРР: {current.drr * 100:.1f}% ({_percentage_points(current.drr, previous.drr)})",
+        f"Чистая прибыль: {format_money(current.total_profit)} ({_relative_change(current.total_profit, previous.total_profit)})",
+        f"Маржинальность: {current.margin * 100:.1f}% ({_percentage_points(current.margin, previous.margin)})",
+    ]
+
+    alerts: list[str] = []
+    if previous.total_profit > 0 and current.total_profit < previous.total_profit * 0.85:
+        alerts.append("Чистая прибыль снизилась более чем на 15% к предыдущей неделе.")
+    if previous.total_revenue > 0 and current.total_revenue < previous.total_revenue * 0.80:
+        alerts.append("Доход снизился более чем на 20% к предыдущей неделе.")
+    if current.total_revenue > 0 and current.margin < margin_limit:
+        alerts.append(
+            f"Общая маржинальность {current.margin * 100:.1f}% ниже порога {margin_limit * 100:.0f}%."
+        )
+    if current.total_revenue > 0 and current.drr > drr_limit:
+        alerts.append(f"Общий ДРР {current.drr * 100:.1f}% выше порога {drr_limit * 100:.0f}%.")
+    if current.missing_cost_skus:
+        alerts.append("Не найдена себестоимость: " + ", ".join(current.missing_cost_skus[:6]))
+
+    negative_items = sorted(
+        [item for item in current.active_items if item.sold_units > 0 and item.profit < -0.01],
+        key=lambda item: item.profit,
+    )
+    for item in negative_items[:5]:
+        alerts.append(
+            f"{_short_label(item.name or item.sku)} продаётся в минус: {format_money(item.profit)}."
+        )
+
+    low_margin_items = sorted(
+        [
+            item
+            for item in current.active_items
+            if item.sold_units > 0
+            and item.revenue > 0
+            and item.profit >= -0.01
+            and item.margin < margin_limit
+        ],
+        key=lambda item: item.margin,
+    )
+    for item in low_margin_items[:4]:
+        alerts.append(
+            f"Низкая маржа у {_short_label(item.name or item.sku)}: {item.margin * 100:.1f}%."
+        )
+
+    high_drr_items = sorted(
+        [item for item in current.active_items if item.advertising > 0 and item.drr > drr_limit],
+        key=lambda item: item.drr,
+        reverse=True,
+    )
+    for item in high_drr_items[:4]:
+        alerts.append(
+            f"Высокий ДРР у {_short_label(item.name or item.sku)}: {item.drr * 100:.1f}%."
+        )
+
+    lines.extend(["", "⚠️ Что требует внимания:"] if alerts else ["", "✅ Критичных проблем по заданным порогам не найдено."] )
+    if alerts:
+        lines.extend(f"• {alert}" for alert in alerts[:12])
+    lines.extend(
+        [
+            "",
+            f"Пороги: маржа ниже {margin_limit * 100:.0f}%, ДРР выше {drr_limit * 100:.0f}%.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 async def send_api_report_to_chat(
     bot,
     chat_id: int,
@@ -192,26 +388,14 @@ async def send_api_report_to_chat(
         + f"Загружаю отчёт WB за {date_from.strftime('%d.%m.%Y')}–{date_to.strftime('%d.%m.%Y')}…",
     )
     try:
-        rows = await get_sales_report(token, date_from, date_to, period=period)
-        result = await asyncio.to_thread(
-            analyze_api_report,
-            rows,
-            COSTS_FILE,
+        result = await calculate_api_result(
+            token,
             date_from,
             date_to,
+            period=period,
+            status=status,
+            prefix=prefix,
         )
-
-        await status.edit_text(
-            prefix
-            + f"Финансовый отчёт получен. Загружаю рекламу за "
-            f"{date_from.strftime('%d.%m.%Y')}–{date_to.strftime('%d.%m.%Y')}…"
-        )
-        try:
-            ad_stats = await get_advertising_stats(token, date_from, date_to)
-            result = apply_advertising(result, ad_stats)
-        except WbApiError as ad_exc:
-            logger.warning("Не удалось загрузить рекламу WB: %s", ad_exc)
-            result.advertising_warning = str(ad_exc)
 
         if not result.active_items:
             if period == "daily":
@@ -260,6 +444,74 @@ async def send_api_report(
         date_to,
         period=period,
     )
+
+
+async def send_weekly_comparison_to_chat(
+    bot,
+    chat_id: int,
+    *,
+    automatic: bool = False,
+) -> None:
+    if not COSTS_FILE.exists():
+        await bot.send_message(chat_id, "На сервере не найден файл себестоимости data/costs.xlsx.")
+        return
+
+    current_start, current_end = last_completed_week(datetime.now(configured_timezone()).date())
+    previous_start, previous_end = previous_completed_week(datetime.now(configured_timezone()).date())
+    prefix = "📅 Автоматический недельный отчёт.\n\n" if automatic else ""
+    status = await bot.send_message(
+        chat_id,
+        prefix + f"Считаю неделю {format_period(current_start, current_end)}…",
+    )
+    token = os.getenv("WB_API_TOKEN", "").strip()
+
+    try:
+        current = await calculate_api_result(
+            token,
+            current_start,
+            current_end,
+            period="weekly",
+            status=status,
+            prefix=prefix,
+        )
+        if not current.active_items:
+            await status.edit_text(prefix + "WB не вернул операций за последнюю завершённую неделю.")
+            return
+
+        await status.edit_text(
+            prefix
+            + f"Последняя неделя готова. Загружаю предыдущую {format_period(previous_start, previous_end)}. "
+            "Из-за лимита WB это может занять около минуты…"
+        )
+        previous = await calculate_api_result(
+            token,
+            previous_start,
+            previous_end,
+            period="weekly",
+        )
+        comparison = build_weekly_comparison_message(current, previous)
+        await status.edit_text(prefix + comparison)
+
+        current_messages = build_messages(current)
+        await bot.send_message(chat_id, "📦 Детализация последней недели:\n\n" + current_messages[1])
+    except WbApiError as exc:
+        await status.edit_text(prefix + f"❌ Не удалось сравнить недели.\n\n{exc}")
+    except Exception as exc:
+        logger.exception("Ошибка сравнения недель")
+        await status.edit_text(
+            prefix
+            + "❌ Не смог сравнить недели.\n"
+            f"Техническая ошибка: {type(exc).__name__}: {exc}"
+        )
+
+
+async def compare_weeks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await reject_if_not_allowed(update):
+        return
+    chat = update.effective_chat
+    if not chat:
+        return
+    await send_weekly_comparison_to_chat(context.bot, chat.id)
 
 
 async def last_week_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -328,21 +580,24 @@ async def schedule_status(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     timezone = configured_timezone()
-    hour, minute = configured_daily_time()
-    if auto_daily_enabled():
-        await message.reply_text(
-            "✅ Автоматический отчёт включён.\n"
-            f"Каждый день в {hour:02d}:{minute:02d} ({timezone.key}) бот присылает расчёт за вчера.\n\n"
-            "Настройки находятся в Railway Variables: AUTO_DAILY_REPORT, DAILY_REPORT_TIME, REPORT_TIMEZONE."
-        )
-    else:
-        await message.reply_text(
-            "⏸ Автоматический отчёт выключен.\n\n"
-            "Чтобы включить, добавь в Railway Variables:\n"
-            "AUTO_DAILY_REPORT=true\n"
-            f"DAILY_REPORT_TIME={hour:02d}:{minute:02d}\n"
-            f"REPORT_TIMEZONE={timezone.key}"
-        )
+    daily_hour, daily_minute = configured_daily_time()
+    weekly_hour, weekly_minute = configured_weekly_time()
+
+    daily_status = (
+        f"✅ Ежедневный: каждый день в {daily_hour:02d}:{daily_minute:02d}"
+        if auto_daily_enabled()
+        else "⏸ Ежедневный: выключен"
+    )
+    weekly_status = (
+        f"✅ Недельный: каждый понедельник в {weekly_hour:02d}:{weekly_minute:02d}"
+        if auto_weekly_enabled()
+        else "⏸ Недельный: выключен"
+    )
+    await message.reply_text(
+        f"{daily_status}\n{weekly_status}\nЧасовой пояс: {timezone.key}\n\n"
+        "Настройки Railway Variables:\n"
+        "AUTO_DAILY_REPORT, DAILY_REPORT_TIME, AUTO_WEEKLY_REPORT, WEEKLY_REPORT_TIME, REPORT_TIMEZONE."
+    )
 
 
 async def scheduled_daily_report(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -362,14 +617,18 @@ async def scheduled_daily_report(context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-async def configure_jobs(application: Application) -> None:
-    if not auto_daily_enabled():
-        logger.info("Автоматический ежедневный отчёт выключен.")
+async def scheduled_weekly_report(context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = context.job.chat_id if context.job else allowed_user_id()
+    if not chat_id:
+        logger.error("Автоматический недельный отчёт пропущен: не задан ALLOWED_USER_ID.")
         return
+    await send_weekly_comparison_to_chat(context.bot, int(chat_id), automatic=True)
 
+
+async def configure_jobs(application: Application) -> None:
     chat_id = allowed_user_id()
     if not chat_id:
-        logger.error("Автоматический отчёт не запущен: не задан ALLOWED_USER_ID.")
+        logger.error("Автоматические отчёты не запущены: не задан ALLOWED_USER_ID.")
         return
 
     job_queue = application.job_queue
@@ -380,25 +639,53 @@ async def configure_jobs(application: Application) -> None:
         return
 
     timezone = configured_timezone()
-    hour, minute = configured_daily_time()
-    job_queue.run_daily(
-        scheduled_daily_report,
-        time=dt_time(hour=hour, minute=minute, tzinfo=timezone),
-        chat_id=chat_id,
-        user_id=chat_id,
-        name="daily-yesterday-profit-report",
-        job_kwargs={
-            "coalesce": True,
-            "max_instances": 1,
-            "misfire_grace_time": 3600,
-        },
-    )
-    logger.info(
-        "Автоматический отчёт назначен на %02d:%02d (%s)",
-        hour,
-        minute,
-        timezone.key,
-    )
+
+    if auto_daily_enabled():
+        hour, minute = configured_daily_time()
+        job_queue.run_daily(
+            scheduled_daily_report,
+            time=dt_time(hour=hour, minute=minute, tzinfo=timezone),
+            chat_id=chat_id,
+            user_id=chat_id,
+            name="daily-yesterday-profit-report",
+            job_kwargs={
+                "coalesce": True,
+                "max_instances": 1,
+                "misfire_grace_time": 3600,
+            },
+        )
+        logger.info(
+            "Автоматический ежедневный отчёт назначен на %02d:%02d (%s)",
+            hour,
+            minute,
+            timezone.key,
+        )
+    else:
+        logger.info("Автоматический ежедневный отчёт выключен.")
+
+    if auto_weekly_enabled():
+        hour, minute = configured_weekly_time()
+        job_queue.run_daily(
+            scheduled_weekly_report,
+            time=dt_time(hour=hour, minute=minute, tzinfo=timezone),
+            days=(1,),  # 0 — воскресенье, 1 — понедельник в PTB 22.x
+            chat_id=chat_id,
+            user_id=chat_id,
+            name="weekly-profit-comparison",
+            job_kwargs={
+                "coalesce": True,
+                "max_instances": 1,
+                "misfire_grace_time": 7200,
+            },
+        )
+        logger.info(
+            "Автоматический недельный отчёт назначен на понедельник %02d:%02d (%s)",
+            hour,
+            minute,
+            timezone.key,
+        )
+    else:
+        logger.info("Автоматический недельный отчёт выключен.")
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -450,7 +737,7 @@ async def unknown_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
     if update.effective_message:
         await update.effective_message.reply_text(
-            "Используй /yesterday, /week, /month, /report, /schedule или пришли файл .xlsx."
+            "Используй /yesterday, /week, /compare, /month, /report, /schedule или пришли файл .xlsx."
         )
 
 
@@ -466,13 +753,14 @@ def main() -> None:
     app.add_handler(CommandHandler("balance", wb_balance))
     app.add_handler(CommandHandler("yesterday", yesterday_report))
     app.add_handler(CommandHandler("week", last_week_report))
+    app.add_handler(CommandHandler("compare", compare_weeks))
     app.add_handler(CommandHandler("month", month_report))
     app.add_handler(CommandHandler("report", custom_report))
     app.add_handler(CommandHandler("schedule", schedule_status))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.ALL, unknown_message))
 
-    logger.info("WB Profit Bot v7 запущен")
+    logger.info("WB Profit Bot v8 запущен")
     app.run_polling(drop_pending_updates=True)
 
 
