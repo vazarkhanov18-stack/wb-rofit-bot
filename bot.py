@@ -24,6 +24,7 @@ from wb_api import (
 )
 from wb_api_profit import analyze_api_report, apply_advertising
 from wb_db import database_enabled, database_status, init_database, list_history, save_report
+from wb_management import init_management_store, seed_management_from_excel
 from dashboard import start_dashboard_server
 from wb_profit import ReportResult, analyze_report, build_messages, format_money, format_period, format_units
 from wb_stock import (
@@ -1248,11 +1249,20 @@ async def initialize_application(application: Application) -> None:
     if database_enabled():
         try:
             await asyncio.to_thread(init_database)
-            logger.info("PostgreSQL подключён, таблицы истории готовы.")
+            await asyncio.to_thread(init_management_store)
+            imported_costs, imported_expenses = await asyncio.to_thread(
+                seed_management_from_excel,
+                COSTS_FILE,
+            )
+            logger.info(
+                "PostgreSQL подключён. История готова; в панель данных перенесено: себестоимость=%d, расходы=%d.",
+                imported_costs,
+                imported_expenses,
+            )
         except Exception:
             logger.exception("Не удалось инициализировать PostgreSQL. Бот продолжит работу без истории.")
     else:
-        logger.info("DATABASE_URL не задан: история отчётов отключена.")
+        logger.info("DATABASE_URL не задан: история отчётов и управление данными отключены.")
 
     try:
         start_dashboard_server()
