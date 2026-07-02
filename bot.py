@@ -4,7 +4,7 @@ import asyncio
 import logging
 import os
 import tempfile
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time as dt_time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -40,6 +40,34 @@ def allowed_user_id() -> int | None:
     except ValueError:
         logger.warning("ALLOWED_USER_ID указан неверно: %s", raw)
         return None
+
+
+def auto_daily_enabled() -> bool:
+    raw = os.getenv("AUTO_DAILY_REPORT", "false").strip().lower()
+    return raw in {"1", "true", "yes", "on", "да"}
+
+
+def configured_timezone() -> ZoneInfo:
+    name = os.getenv("REPORT_TIMEZONE", "Europe/Moscow").strip() or "Europe/Moscow"
+    try:
+        return ZoneInfo(name)
+    except Exception:
+        logger.warning("Неизвестный REPORT_TIMEZONE=%s. Использую Europe/Moscow.", name)
+        return MOSCOW_TZ
+
+
+def configured_daily_time() -> tuple[int, int]:
+    raw = os.getenv("DAILY_REPORT_TIME", "12:00").strip()
+    try:
+        hour_text, minute_text = raw.split(":", maxsplit=1)
+        hour = int(hour_text)
+        minute = int(minute_text)
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            raise ValueError
+        return hour, minute
+    except ValueError:
+        logger.warning("Неверный DAILY_REPORT_TIME=%s. Использую 12:00.", raw)
+        return 12, 0
 
 
 def is_allowed(update: Update) -> bool:
@@ -98,6 +126,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/month — текущий месяц по вчерашний день.\n"
         "/report 04.05.2026 10.05.2026 — свой период.\n"
         "/balance — проверить подключение и баланс кабинета.\n"
+        "/schedule — статус автоматического ежедневного отчёта.\n"
         "/id — показать твой Telegram ID.\n\n"
         "Также можно по-прежнему прислать детализацию WB файлом .xlsx."
     )
@@ -142,23 +171,25 @@ async def wb_balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         )
 
 
-async def send_api_report(
-    update: Update,
+async def send_api_report_to_chat(
+    bot,
+    chat_id: int,
     date_from: date,
     date_to: date,
     *,
     period: str = "weekly",
+    automatic: bool = False,
 ) -> None:
-    message = update.effective_message
-    if not message:
-        return
     if not COSTS_FILE.exists():
-        await message.reply_text("На сервере не найден файл себестоимости data/costs.xlsx.")
+        await bot.send_message(chat_id, "На сервере не найден файл себестоимости data/costs.xlsx.")
         return
 
     token = os.getenv("WB_API_TOKEN", "").strip()
-    status = await message.reply_text(
-        f"Загружаю отчёт WB за {date_from.strftime('%d.%m.%Y')}–{date_to.strftime('%d.%m.%Y')}…"
+    prefix = "⏰ Автоматический отчёт.\n\n" if automatic else ""
+    status = await bot.send_message(
+        chat_id,
+        prefix
+        + f"Загружаю отчёт WB за {date_from.strftime('%d.%m.%Y')}–{date_to.strftime('%d.%m.%Y')}…",
     )
     try:
         rows = await get_sales_report(token, date_from, date_to, period=period)
@@ -171,7 +202,8 @@ async def send_api_report(
         )
 
         await status.edit_text(
-            f"Финансовый отчёт получен. Загружаю рекламу за "
+            prefix
+            + f"Финансовый отчёт получен. Загружаю рекламу за "
             f"{date_from.strftime('%d.%m.%Y')}–{date_to.strftime('%d.%m.%Y')}…"
         )
         try:
@@ -184,49 +216,71 @@ async def send_api_report(
         if not result.active_items:
             if period == "daily":
                 await status.edit_text(
-                    "WB пока не сформировал ежедневный финансовый отчёт за этот период. "
+                    prefix
+                    + "WB пока не сформировал ежедневный финансовый отчёт за этот период. "
                     "Такие данные могут появляться с задержкой. Попробуй команду позже. "
                     "Команда /week использует уже закрытый недельный отчёт и обычно работает стабильнее."
                 )
             else:
                 await status.edit_text(
-                    "WB не вернул финансовых операций и рекламных расходов за этот период."
+                    prefix + "WB не вернул финансовых операций и рекламных расходов за этот период."
                 )
             return
 
         messages = build_messages(result)
-        await status.edit_text(messages[0])
+        await status.edit_text(prefix + messages[0])
         for text in messages[1:]:
-            await message.reply_text(text)
+            await bot.send_message(chat_id, text)
     except WbApiError as exc:
-        await status.edit_text(f"❌ Не удалось получить отчёт WB.\n\n{exc}")
+        await status.edit_text(prefix + f"❌ Не удалось получить отчёт WB.\n\n{exc}")
     except Exception as exc:
         logger.exception("Ошибка автоматического финансового отчёта")
         await status.edit_text(
-            "❌ Не смог посчитать отчёт через WB API.\n"
+            prefix
+            + "❌ Не смог посчитать отчёт через WB API.\n"
             f"Техническая ошибка: {type(exc).__name__}: {exc}"
         )
+
+
+async def send_api_report(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    date_from: date,
+    date_to: date,
+    *,
+    period: str = "weekly",
+) -> None:
+    chat = update.effective_chat
+    if not chat:
+        return
+    await send_api_report_to_chat(
+        context.bot,
+        chat.id,
+        date_from,
+        date_to,
+        period=period,
+    )
 
 
 async def last_week_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await reject_if_not_allowed(update):
         return
     start_date, end_date = last_completed_week()
-    await send_api_report(update, start_date, end_date, period="weekly")
+    await send_api_report(update, context, start_date, end_date, period="weekly")
 
 
 async def yesterday_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await reject_if_not_allowed(update):
         return
     start_date, end_date = yesterday_period()
-    await send_api_report(update, start_date, end_date, period="daily")
+    await send_api_report(update, context, start_date, end_date, period="daily")
 
 
 async def month_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await reject_if_not_allowed(update):
         return
     start_date, end_date = current_month_period()
-    await send_api_report(update, start_date, end_date, period="daily")
+    await send_api_report(update, context, start_date, end_date, period="daily")
 
 
 async def custom_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -259,9 +313,91 @@ async def custom_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     )
     await send_api_report(
         update,
+        context,
         start_date,
         end_date,
         period="weekly" if is_full_weeks else "daily",
+    )
+
+
+async def schedule_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await reject_if_not_allowed(update):
+        return
+    message = update.effective_message
+    if not message:
+        return
+
+    timezone = configured_timezone()
+    hour, minute = configured_daily_time()
+    if auto_daily_enabled():
+        await message.reply_text(
+            "✅ Автоматический отчёт включён.\n"
+            f"Каждый день в {hour:02d}:{minute:02d} ({timezone.key}) бот присылает расчёт за вчера.\n\n"
+            "Настройки находятся в Railway Variables: AUTO_DAILY_REPORT, DAILY_REPORT_TIME, REPORT_TIMEZONE."
+        )
+    else:
+        await message.reply_text(
+            "⏸ Автоматический отчёт выключен.\n\n"
+            "Чтобы включить, добавь в Railway Variables:\n"
+            "AUTO_DAILY_REPORT=true\n"
+            f"DAILY_REPORT_TIME={hour:02d}:{minute:02d}\n"
+            f"REPORT_TIMEZONE={timezone.key}"
+        )
+
+
+async def scheduled_daily_report(context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = context.job.chat_id if context.job else allowed_user_id()
+    if not chat_id:
+        logger.error("Автоматический отчёт пропущен: не задан ALLOWED_USER_ID.")
+        return
+
+    start_date, end_date = yesterday_period(datetime.now(configured_timezone()).date())
+    await send_api_report_to_chat(
+        context.bot,
+        int(chat_id),
+        start_date,
+        end_date,
+        period="daily",
+        automatic=True,
+    )
+
+
+async def configure_jobs(application: Application) -> None:
+    if not auto_daily_enabled():
+        logger.info("Автоматический ежедневный отчёт выключен.")
+        return
+
+    chat_id = allowed_user_id()
+    if not chat_id:
+        logger.error("Автоматический отчёт не запущен: не задан ALLOWED_USER_ID.")
+        return
+
+    job_queue = application.job_queue
+    if job_queue is None:
+        logger.error(
+            "JobQueue недоступен. Проверь requirements.txt: нужен python-telegram-bot[job-queue]."
+        )
+        return
+
+    timezone = configured_timezone()
+    hour, minute = configured_daily_time()
+    job_queue.run_daily(
+        scheduled_daily_report,
+        time=dt_time(hour=hour, minute=minute, tzinfo=timezone),
+        chat_id=chat_id,
+        user_id=chat_id,
+        name="daily-yesterday-profit-report",
+        job_kwargs={
+            "coalesce": True,
+            "max_instances": 1,
+            "misfire_grace_time": 3600,
+        },
+    )
+    logger.info(
+        "Автоматический отчёт назначен на %02d:%02d (%s)",
+        hour,
+        minute,
+        timezone.key,
     )
 
 
@@ -314,7 +450,7 @@ async def unknown_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
     if update.effective_message:
         await update.effective_message.reply_text(
-            "Используй /yesterday, /week, /month, /report или пришли файл .xlsx."
+            "Используй /yesterday, /week, /month, /report, /schedule или пришли файл .xlsx."
         )
 
 
@@ -323,7 +459,7 @@ def main() -> None:
     if not token:
         raise RuntimeError("Не задана переменная BOT_TOKEN.")
 
-    app = Application.builder().token(token).build()
+    app = Application.builder().token(token).post_init(configure_jobs).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("id", show_id))
@@ -332,10 +468,11 @@ def main() -> None:
     app.add_handler(CommandHandler("week", last_week_report))
     app.add_handler(CommandHandler("month", month_report))
     app.add_handler(CommandHandler("report", custom_report))
+    app.add_handler(CommandHandler("schedule", schedule_status))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.ALL, unknown_message))
 
-    logger.info("WB Profit Bot v6 запущен")
+    logger.info("WB Profit Bot v7 запущен")
     app.run_polling(drop_pending_updates=True)
 
 
