@@ -146,6 +146,8 @@ async def send_api_report(
     update: Update,
     date_from: date,
     date_to: date,
+    *,
+    period: str = "weekly",
 ) -> None:
     message = update.effective_message
     if not message:
@@ -159,7 +161,7 @@ async def send_api_report(
         f"Загружаю отчёт WB за {date_from.strftime('%d.%m.%Y')}–{date_to.strftime('%d.%m.%Y')}…"
     )
     try:
-        rows = await get_sales_report(token, date_from, date_to, period="weekly")
+        rows = await get_sales_report(token, date_from, date_to, period=period)
         result = await asyncio.to_thread(
             analyze_api_report,
             rows,
@@ -180,9 +182,16 @@ async def send_api_report(
             result.advertising_warning = str(ad_exc)
 
         if not result.active_items:
-            await status.edit_text(
-                "WB не вернул финансовых операций и рекламных расходов за этот период."
-            )
+            if period == "daily":
+                await status.edit_text(
+                    "WB пока не сформировал ежедневный финансовый отчёт за этот период. "
+                    "Такие данные могут появляться с задержкой. Попробуй команду позже. "
+                    "Команда /week использует уже закрытый недельный отчёт и обычно работает стабильнее."
+                )
+            else:
+                await status.edit_text(
+                    "WB не вернул финансовых операций и рекламных расходов за этот период."
+                )
             return
 
         messages = build_messages(result)
@@ -203,21 +212,21 @@ async def last_week_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if await reject_if_not_allowed(update):
         return
     start_date, end_date = last_completed_week()
-    await send_api_report(update, start_date, end_date)
+    await send_api_report(update, start_date, end_date, period="weekly")
 
 
 async def yesterday_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await reject_if_not_allowed(update):
         return
     start_date, end_date = yesterday_period()
-    await send_api_report(update, start_date, end_date)
+    await send_api_report(update, start_date, end_date, period="daily")
 
 
 async def month_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await reject_if_not_allowed(update):
         return
     start_date, end_date = current_month_period()
-    await send_api_report(update, start_date, end_date)
+    await send_api_report(update, start_date, end_date, period="daily")
 
 
 async def custom_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -243,7 +252,17 @@ async def custom_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if (end_date - start_date).days > 62:
         await message.reply_text("Пока выбирай период не длиннее 63 дней.")
         return
-    await send_api_report(update, start_date, end_date)
+    is_full_weeks = (
+        start_date.weekday() == 0
+        and end_date.weekday() == 6
+        and ((end_date - start_date).days + 1) % 7 == 0
+    )
+    await send_api_report(
+        update,
+        start_date,
+        end_date,
+        period="weekly" if is_full_weeks else "daily",
+    )
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -316,7 +335,7 @@ def main() -> None:
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.ALL, unknown_message))
 
-    logger.info("WB Profit Bot v5 запущен")
+    logger.info("WB Profit Bot v6 запущен")
     app.run_polling(drop_pending_updates=True)
 
 
