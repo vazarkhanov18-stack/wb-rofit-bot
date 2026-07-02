@@ -9,11 +9,13 @@ from wb_profit import (
     UNALLOCATED_SKU,
     ReportResult,
     SkuResult,
+    apply_external_expenses,
     as_date,
     as_number,
-    load_costs,
+    load_cost_profiles,
     normalize_sku,
     normalize_text,
+    resolve_cost_profile,
     valid_sku,
 )
 
@@ -31,20 +33,32 @@ def _as_nm_id(value: Any) -> int | None:
         return None
 
 
+def _transaction_date(row: dict[str, Any], fallback: date | None = None) -> date | None:
+    for key in ("saleDt", "orderDt", "rrdDt", "dateFrom", "dateTo"):
+        parsed = as_date(_value(row, key))
+        if parsed:
+            return parsed
+    return fallback
+
+
 def analyze_api_report(
     rows: Iterable[dict[str, Any]],
     costs_path: str | Path,
     requested_start: date | None = None,
     requested_end: date | None = None,
 ) -> ReportResult:
-    """Считает прибыль из строк Finance API WB."""
+    """Считает прибыль из строк Finance API WB с историей себестоимости."""
     rows = list(rows)
-    costs = load_costs(costs_path)
+    profiles = load_cost_profiles(costs_path)
 
-    results: dict[str, SkuResult] = {
-        key: SkuResult(sku=cost.sku, name=cost.name, unit_cost=cost.unit_cost)
-        for key, cost in costs.items()
-    }
+    results: dict[str, SkuResult] = {}
+    for key, history in profiles.items():
+        latest = history[-1]
+        results[key] = SkuResult(
+            sku=latest.sku,
+            name=latest.name,
+            unit_cost=latest.unit_cost,
+        )
 
     barcode_to_sku: dict[str, str] = {}
     nm_to_sku: dict[int, str] = {}
@@ -65,6 +79,7 @@ def analyze_api_report(
 
     starts: list[date] = []
     ends: list[date] = []
+    missing_keys: set[str] = set()
 
     for row in rows:
         reason = normalize_text(_value(row, "sellerOperName") or _value(row, "docTypeName"))
@@ -95,7 +110,6 @@ def analyze_api_report(
             results[sku_key] = SkuResult(
                 sku=display_sku,
                 name=display_name,
-                unit_cost=0.0,
                 nm_id=nm_id,
             )
 
@@ -111,11 +125,10 @@ def analyze_api_report(
             starts.append(start)
         if end:
             ends.append(end)
-        if not start and not end:
-            sale_date = as_date(_value(row, "saleDt"))
-            if sale_date:
-                starts.append(sale_date)
-                ends.append(sale_date)
+        transaction_date = _transaction_date(row, requested_end or requested_start)
+        if not start and not end and transaction_date:
+            starts.append(transaction_date)
+            ends.append(transaction_date)
 
         if is_sale or is_return:
             qty = as_number(_value(row, "quantity"))
@@ -131,6 +144,16 @@ def analyze_api_report(
             item.revenue += revenue
             item.payout_for_goods += payout
 
+            profile = resolve_cost_profile(profiles, sku_key, transaction_date)
+            if profile is None:
+                missing_keys.add(item.sku)
+            else:
+                item.unit_cost = profile.unit_cost
+                if not item.name:
+                    item.name = profile.name
+                item.cogs_amount += qty * profile.unit_cost
+                item.unit_external_expenses += qty * profile.unit_external_expense
+
         item.logistics += as_number(_value(row, "deliveryService"))
         item.transport += as_number(_value(row, "rebillLogisticCost"))
         item.handling += as_number(_value(row, "paidAcceptance"))
@@ -138,20 +161,15 @@ def analyze_api_report(
         item.other_withholdings += as_number(_value(row, "deduction"))
         item.fines += as_number(_value(row, "penalty"))
 
-    active = [item for item in results.values() if item.has_activity]
-    missing = sorted(
-        item.sku
-        for item in active
-        if item.sold_units != 0 and normalize_sku(item.sku) not in costs
-    )
-    active.sort(key=lambda item: (item.revenue, item.profit), reverse=True)
-
-    return ReportResult(
+    result = ReportResult(
         period_start=min(starts) if starts else requested_start,
         period_end=max(ends) if ends else requested_end,
-        items=active,
-        missing_cost_skus=missing,
+        items=[item for item in results.values() if item.has_activity],
+        missing_cost_skus=sorted(missing_keys),
     )
+    apply_external_expenses(result, costs_path)
+    result.items.sort(key=lambda item: (item.revenue, item.profit), reverse=True)
+    return result
 
 
 def apply_advertising(result: ReportResult, stats: AdvertisingStats) -> ReportResult:

@@ -485,8 +485,9 @@ async def report_history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     "",
                     f"{period} · {_history_type_label(row.period_type)}",
                     f"Продано: {format_units(row.units)} шт. | Доход: {format_money(row.revenue)}",
-                    f"Реклама: {format_money(row.advertising)} | ДРР: {row.drr * 100:.1f}%",
-                    f"Прибыль: {format_money(row.profit)} | Маржа: {row.margin * 100:.1f}%",
+                    f"Внешние: {format_money(row.external_expenses)} | Реклама: {format_money(row.advertising)}",
+                    f"До налога: {format_money(row.profit_before_tax)} | УСН: {format_money(row.tax)}",
+                    f"Чистая: {format_money(row.profit)} | Маржа: {row.margin * 100:.1f}%",
                 ]
             )
         await message.reply_text("\n".join(lines))

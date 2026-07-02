@@ -18,6 +18,9 @@ class HistoryRow:
     units: float
     revenue: float
     advertising: float
+    external_expenses: float
+    profit_before_tax: float
+    tax: float
     profit: float
     margin: float
     drr: float
@@ -40,7 +43,7 @@ def _connect():
 
 
 def init_database() -> None:
-    """Создаёт таблицы при первом запуске. Повторный запуск безопасен."""
+    """Создаёт и безопасно обновляет таблицы при запуске."""
     with _connect() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
@@ -57,7 +60,12 @@ def init_database() -> None:
                     cogs DOUBLE PRECISION NOT NULL DEFAULT 0,
                     tax DOUBLE PRECISION NOT NULL DEFAULT 0,
                     advertising DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    unit_expenses DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    general_expenses DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    external_expenses DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    operating_before_ads_tax DOUBLE PRECISION NOT NULL DEFAULT 0,
                     profit_before_ads DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    profit_before_tax DOUBLE PRECISION NOT NULL DEFAULT 0,
                     profit DOUBLE PRECISION NOT NULL DEFAULT 0,
                     margin DOUBLE PRECISION NOT NULL DEFAULT 0,
                     drr DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -80,7 +88,12 @@ def init_database() -> None:
                     cogs DOUBLE PRECISION NOT NULL DEFAULT 0,
                     tax DOUBLE PRECISION NOT NULL DEFAULT 0,
                     advertising DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    unit_expenses DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    general_expenses DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    external_expenses DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    operating_before_ads_tax DOUBLE PRECISION NOT NULL DEFAULT 0,
                     profit_before_ads DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    profit_before_tax DOUBLE PRECISION NOT NULL DEFAULT 0,
                     profit DOUBLE PRECISION NOT NULL DEFAULT 0,
                     margin DOUBLE PRECISION NOT NULL DEFAULT 0,
                     drr DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -88,6 +101,43 @@ def init_database() -> None:
                 )
                 """
             )
+
+            # Миграция баз, созданных предыдущими версиями.
+            report_columns = {
+                "unit_expenses": "DOUBLE PRECISION NOT NULL DEFAULT 0",
+                "general_expenses": "DOUBLE PRECISION NOT NULL DEFAULT 0",
+                "external_expenses": "DOUBLE PRECISION NOT NULL DEFAULT 0",
+                "operating_before_ads_tax": "DOUBLE PRECISION NOT NULL DEFAULT 0",
+                "profit_before_tax": "DOUBLE PRECISION NOT NULL DEFAULT 0",
+            }
+            sku_columns = dict(report_columns)
+            for name, sql_type in report_columns.items():
+                cursor.execute(f"ALTER TABLE report_snapshots ADD COLUMN IF NOT EXISTS {name} {sql_type}")
+            for name, sql_type in sku_columns.items():
+                cursor.execute(f"ALTER TABLE sku_snapshots ADD COLUMN IF NOT EXISTS {name} {sql_type}")
+
+            # Для ранее сохранённых отчётов восстанавливаем прибыль до налога.
+            cursor.execute(
+                """
+                UPDATE report_snapshots
+                SET profit_before_tax = profit + tax
+                WHERE ABS(profit_before_tax) < 0.000001 AND (ABS(profit) > 0.000001 OR ABS(tax) > 0.000001)
+                """
+            )
+            cursor.execute(
+                """
+                UPDATE sku_snapshots
+                SET profit_before_tax = profit + tax
+                WHERE ABS(profit_before_tax) < 0.000001 AND (ABS(profit) > 0.000001 OR ABS(tax) > 0.000001)
+                """
+            )
+            cursor.execute(
+                "UPDATE report_snapshots SET external_expenses = unit_expenses + general_expenses"
+            )
+            cursor.execute(
+                "UPDATE sku_snapshots SET external_expenses = unit_expenses + general_expenses"
+            )
+
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_report_snapshots_period_end ON report_snapshots(period_end DESC)"
             )
@@ -108,11 +158,15 @@ def save_report(result: ReportResult, *, period_type: str, source: str = "api") 
                 INSERT INTO report_snapshots (
                     period_start, period_end, period_type, source,
                     units, revenue, payout, cogs, tax, advertising,
-                    profit_before_ads, profit, margin, drr, created_at
+                    unit_expenses, general_expenses, external_expenses,
+                    operating_before_ads_tax, profit_before_ads, profit_before_tax,
+                    profit, margin, drr, created_at
                 ) VALUES (
                     %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, NOW()
+                    %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s, NOW()
                 )
                 ON CONFLICT (period_start, period_end, period_type)
                 DO UPDATE SET
@@ -123,7 +177,12 @@ def save_report(result: ReportResult, *, period_type: str, source: str = "api") 
                     cogs = EXCLUDED.cogs,
                     tax = EXCLUDED.tax,
                     advertising = EXCLUDED.advertising,
+                    unit_expenses = EXCLUDED.unit_expenses,
+                    general_expenses = EXCLUDED.general_expenses,
+                    external_expenses = EXCLUDED.external_expenses,
+                    operating_before_ads_tax = EXCLUDED.operating_before_ads_tax,
                     profit_before_ads = EXCLUDED.profit_before_ads,
+                    profit_before_tax = EXCLUDED.profit_before_tax,
                     profit = EXCLUDED.profit,
                     margin = EXCLUDED.margin,
                     drr = EXCLUDED.drr,
@@ -141,7 +200,12 @@ def save_report(result: ReportResult, *, period_type: str, source: str = "api") 
                     result.total_cogs,
                     result.total_tax,
                     result.total_advertising,
+                    result.total_unit_external_expenses,
+                    result.total_general_external_expenses,
+                    result.total_external_expenses,
+                    result.total_operating_profit_before_ads_and_tax,
                     result.total_profit_before_ads,
+                    result.total_profit_before_tax,
                     result.total_profit,
                     result.margin,
                     result.drr,
@@ -165,7 +229,12 @@ def save_report(result: ReportResult, *, period_type: str, source: str = "api") 
                     item.cogs,
                     item.tax,
                     item.advertising,
+                    item.unit_external_expenses,
+                    item.general_external_expenses,
+                    item.external_expenses,
+                    item.operating_profit_before_ads_and_tax,
                     item.profit_before_ads,
+                    item.profit_before_tax,
                     item.profit,
                     item.margin,
                     item.drr,
@@ -177,10 +246,14 @@ def save_report(result: ReportResult, *, period_type: str, source: str = "api") 
                     """
                     INSERT INTO sku_snapshots (
                         report_id, sku, nm_id, name, units, revenue, payout,
-                        cogs, tax, advertising, profit_before_ads, profit, margin, drr
+                        cogs, tax, advertising, unit_expenses, general_expenses,
+                        external_expenses, operating_before_ads_tax, profit_before_ads,
+                        profit_before_tax, profit, margin, drr
                     ) VALUES (
                         %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s,
+                        %s, %s, %s,
+                        %s, %s, %s, %s
                     )
                     """,
                     records,
@@ -195,7 +268,8 @@ def list_history(limit: int = 10) -> list[HistoryRow]:
             cursor.execute(
                 """
                 SELECT period_start, period_end, period_type, units, revenue,
-                       advertising, profit, margin, drr, created_at
+                       advertising, external_expenses, profit_before_tax, tax,
+                       profit, margin, drr, created_at
                 FROM report_snapshots
                 ORDER BY period_end DESC, period_start DESC, created_at DESC
                 LIMIT %s
@@ -228,7 +302,12 @@ class DashboardReportRow:
     cogs: float
     tax: float
     advertising: float
+    unit_expenses: float
+    general_expenses: float
+    external_expenses: float
+    operating_before_ads_tax: float
     profit_before_ads: float
+    profit_before_tax: float
     profit: float
     margin: float
     drr: float
@@ -246,7 +325,12 @@ class DashboardSkuRow:
     cogs: float
     tax: float
     advertising: float
+    unit_expenses: float
+    general_expenses: float
+    external_expenses: float
+    operating_before_ads_tax: float
     profit_before_ads: float
+    profit_before_tax: float
     profit: float
     margin: float
     drr: float
@@ -257,7 +341,6 @@ def list_dashboard_reports(
     *,
     period_type: str | None = None,
 ) -> list[DashboardReportRow]:
-    """Возвращает последние сохранённые периоды для веб-дашборда."""
     limit = max(1, min(int(limit), 250))
     where_sql = ""
     params: list[object] = []
@@ -272,10 +355,12 @@ def list_dashboard_reports(
                 f"""
                 SELECT id AS report_id, period_start, period_end, period_type, source,
                        units, revenue, payout, cogs, tax, advertising,
-                       profit_before_ads, profit, margin, drr, created_at
+                       unit_expenses, general_expenses, external_expenses,
+                       operating_before_ads_tax, profit_before_ads, profit_before_tax,
+                       profit, margin, drr, created_at
                 FROM report_snapshots
                 {where_sql}
-                ORDER BY created_at DESC, period_end DESC, period_start DESC
+                ORDER BY period_end DESC, period_start DESC, created_at DESC
                 LIMIT %s
                 """,
                 tuple(params),
@@ -290,7 +375,9 @@ def get_dashboard_report(report_id: int) -> DashboardReportRow | None:
                 """
                 SELECT id AS report_id, period_start, period_end, period_type, source,
                        units, revenue, payout, cogs, tax, advertising,
-                       profit_before_ads, profit, margin, drr, created_at
+                       unit_expenses, general_expenses, external_expenses,
+                       operating_before_ads_tax, profit_before_ads, profit_before_tax,
+                       profit, margin, drr, created_at
                 FROM report_snapshots
                 WHERE id = %s
                 """,
@@ -307,7 +394,9 @@ def list_dashboard_skus(report_id: int, limit: int = 200) -> list[DashboardSkuRo
             cursor.execute(
                 """
                 SELECT sku, nm_id, name, units, revenue, payout, cogs, tax,
-                       advertising, profit_before_ads, profit, margin, drr
+                       advertising, unit_expenses, general_expenses, external_expenses,
+                       operating_before_ads_tax, profit_before_ads, profit_before_tax,
+                       profit, margin, drr
                 FROM sku_snapshots
                 WHERE report_id = %s
                 ORDER BY profit DESC, revenue DESC, sku ASC
