@@ -57,7 +57,7 @@ def _headers(token: str) -> dict[str, str]:
         "Authorization": token,
         "Accept": "application/json",
         "Content-Type": "application/json",
-        "User-Agent": "WB-Profit-Bot/4.0",
+        "User-Agent": "WB-Profit-Bot/5.0",
     }
 
 
@@ -330,14 +330,46 @@ async def get_advertising_stats(
                         category="Продвижение",
                     )
 
-                try:
-                    payload = response.json()
-                except ValueError as exc:
-                    raise WbApiError("WB вернул рекламную статистику в неизвестном формате.") from exc
-                if not isinstance(payload, list):
-                    raise WbApiError("WB вернул неожиданный формат рекламной статистики.")
+                # WB может вернуть пустое тело, null, пустой объект или обёртку
+                # вместо массива, когда за период не было рекламной активности.
+                raw_text = response.text.strip()
+                if not raw_text:
+                    campaigns: list[dict[str, Any]] = []
+                else:
+                    try:
+                        payload = response.json()
+                    except ValueError as exc:
+                        raise WbApiError("WB вернул рекламную статистику в неизвестном формате.") from exc
 
-                for campaign in payload:
+                    if payload is None:
+                        campaigns = []
+                    elif isinstance(payload, list):
+                        campaigns = [item for item in payload if isinstance(item, dict)]
+                    elif isinstance(payload, dict):
+                        # Некоторые ответы WB приходят в обёртке. Пустая обёртка
+                        # означает, что расходов за период нет.
+                        wrapped = (
+                            payload.get("adverts")
+                            or payload.get("items")
+                            or payload.get("data")
+                            or payload.get("result")
+                        )
+                        if isinstance(wrapped, list):
+                            campaigns = [item for item in wrapped if isinstance(item, dict)]
+                        elif not payload:
+                            campaigns = []
+                        elif any(key in payload for key in ("advertId", "advert_id", "days", "sum")):
+                            campaigns = [payload]
+                        else:
+                            logger_payload = str(payload)[:300]
+                            raise WbApiError(
+                                "WB вернул неожиданный формат рекламной статистики. "
+                                f"Начало ответа: {logger_payload}"
+                            )
+                    else:
+                        raise WbApiError("WB вернул неожиданный формат рекламной статистики.")
+
+                for campaign in campaigns:
                     if not isinstance(campaign, dict):
                         continue
                     campaign_total = _as_float(campaign.get("sum"))

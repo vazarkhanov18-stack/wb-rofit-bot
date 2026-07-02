@@ -64,6 +64,19 @@ def last_completed_week(today: date | None = None) -> tuple[date, date]:
     return start, end
 
 
+def yesterday_period(today: date | None = None) -> tuple[date, date]:
+    today = today or datetime.now(MOSCOW_TZ).date()
+    yesterday = today - timedelta(days=1)
+    return yesterday, yesterday
+
+
+def current_month_period(today: date | None = None) -> tuple[date, date]:
+    today = today or datetime.now(MOSCOW_TZ).date()
+    end = today - timedelta(days=1)
+    start = end.replace(day=1)
+    return start, end
+
+
 def parse_user_date(value: str) -> date:
     value = value.strip()
     for fmt in ("%d.%m.%Y", "%Y-%m-%d"):
@@ -80,8 +93,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_message.reply_text(
         "Привет! Я считаю прибыль по финансовым отчётам WB.\n\n"
         "Команды:\n"
-        "/week — автоматически посчитать последнюю завершённую неделю через WB API.\n"
-        "/report 04.05.2026 10.05.2026 — посчитать указанный период через WB API.\n"
+        "/yesterday — отчёт за вчера.\n"
+        "/week — последняя завершённая неделя.\n"
+        "/month — текущий месяц по вчерашний день.\n"
+        "/report 04.05.2026 10.05.2026 — свой период.\n"
         "/balance — проверить подключение и баланс кабинета.\n"
         "/id — показать твой Telegram ID.\n\n"
         "Также можно по-прежнему прислать детализацию WB файлом .xlsx."
@@ -191,6 +206,20 @@ async def last_week_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await send_api_report(update, start_date, end_date)
 
 
+async def yesterday_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await reject_if_not_allowed(update):
+        return
+    start_date, end_date = yesterday_period()
+    await send_api_report(update, start_date, end_date)
+
+
+async def month_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await reject_if_not_allowed(update):
+        return
+    start_date, end_date = current_month_period()
+    await send_api_report(update, start_date, end_date)
+
+
 async def custom_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await reject_if_not_allowed(update):
         return
@@ -266,7 +295,7 @@ async def unknown_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
     if update.effective_message:
         await update.effective_message.reply_text(
-            "Используй /week для автоматического отчёта, /report для своего периода или пришли файл .xlsx."
+            "Используй /yesterday, /week, /month, /report или пришли файл .xlsx."
         )
 
 
@@ -280,12 +309,14 @@ def main() -> None:
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("id", show_id))
     app.add_handler(CommandHandler("balance", wb_balance))
+    app.add_handler(CommandHandler("yesterday", yesterday_report))
     app.add_handler(CommandHandler("week", last_week_report))
+    app.add_handler(CommandHandler("month", month_report))
     app.add_handler(CommandHandler("report", custom_report))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.ALL, unknown_message))
 
-    logger.info("WB Profit Bot v4 запущен")
+    logger.info("WB Profit Bot v5 запущен")
     app.run_polling(drop_pending_updates=True)
 
 
