@@ -24,6 +24,7 @@ from wb_api import (
 )
 from wb_api_profit import analyze_api_report, apply_advertising
 from wb_db import database_enabled, database_status, init_database, list_history, save_report
+from dashboard import start_dashboard_server
 from wb_profit import ReportResult, analyze_report, build_messages, format_money, format_period, format_units
 from wb_stock import (
     build_inventory_snapshot,
@@ -985,6 +986,12 @@ async def initialize_application(application: Application) -> None:
             logger.exception("Не удалось инициализировать PostgreSQL. Бот продолжит работу без истории.")
     else:
         logger.info("DATABASE_URL не задан: история отчётов отключена.")
+
+    try:
+        start_dashboard_server()
+    except Exception:
+        logger.exception("Не удалось запустить веб-дашборд. Telegram-бот продолжит работу.")
+
     await configure_jobs(application)
 
 
@@ -1153,7 +1160,7 @@ def main() -> None:
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.ALL, unknown_message))
 
-    logger.info("WB Profit Bot v11 запущен")
+    logger.info("WB Profit Bot v12 запущен")
     app.run_polling(drop_pending_updates=True)
 
 

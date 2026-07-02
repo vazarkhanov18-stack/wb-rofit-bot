@@ -213,3 +213,106 @@ def database_status() -> tuple[int, datetime | None]:
             if not row:
                 return 0, None
             return int(row[0]), row[1]
+
+
+@dataclass(frozen=True)
+class DashboardReportRow:
+    report_id: int
+    period_start: date
+    period_end: date
+    period_type: str
+    source: str
+    units: float
+    revenue: float
+    payout: float
+    cogs: float
+    tax: float
+    advertising: float
+    profit_before_ads: float
+    profit: float
+    margin: float
+    drr: float
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class DashboardSkuRow:
+    sku: str
+    nm_id: int | None
+    name: str
+    units: float
+    revenue: float
+    payout: float
+    cogs: float
+    tax: float
+    advertising: float
+    profit_before_ads: float
+    profit: float
+    margin: float
+    drr: float
+
+
+def list_dashboard_reports(
+    limit: int = 30,
+    *,
+    period_type: str | None = None,
+) -> list[DashboardReportRow]:
+    """Возвращает последние сохранённые периоды для веб-дашборда."""
+    limit = max(1, min(int(limit), 100))
+    where_sql = ""
+    params: list[object] = []
+    if period_type:
+        where_sql = "WHERE period_type = %s"
+        params.append(period_type)
+    params.append(limit)
+
+    with _connect() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                f"""
+                SELECT id AS report_id, period_start, period_end, period_type, source,
+                       units, revenue, payout, cogs, tax, advertising,
+                       profit_before_ads, profit, margin, drr, created_at
+                FROM report_snapshots
+                {where_sql}
+                ORDER BY created_at DESC, period_end DESC, period_start DESC
+                LIMIT %s
+                """,
+                tuple(params),
+            )
+            return [DashboardReportRow(**dict(row)) for row in cursor.fetchall()]
+
+
+def get_dashboard_report(report_id: int) -> DashboardReportRow | None:
+    with _connect() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT id AS report_id, period_start, period_end, period_type, source,
+                       units, revenue, payout, cogs, tax, advertising,
+                       profit_before_ads, profit, margin, drr, created_at
+                FROM report_snapshots
+                WHERE id = %s
+                """,
+                (int(report_id),),
+            )
+            row = cursor.fetchone()
+            return DashboardReportRow(**dict(row)) if row else None
+
+
+def list_dashboard_skus(report_id: int, limit: int = 200) -> list[DashboardSkuRow]:
+    limit = max(1, min(int(limit), 500))
+    with _connect() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT sku, nm_id, name, units, revenue, payout, cogs, tax,
+                       advertising, profit_before_ads, profit, margin, drr
+                FROM sku_snapshots
+                WHERE report_id = %s
+                ORDER BY profit DESC, revenue DESC, sku ASC
+                LIMIT %s
+                """,
+                (int(report_id), limit),
+            )
+            return [DashboardSkuRow(**dict(row)) for row in cursor.fetchall()]
