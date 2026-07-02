@@ -343,7 +343,7 @@ def dashboard():
         selected_type = ""
 
     reports_desc = list_dashboard_reports(
-        40,
+        200,
         period_type=selected_type or None,
     )
     latest = reports_desc[0] if reports_desc else None

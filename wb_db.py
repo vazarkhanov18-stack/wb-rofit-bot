@@ -258,7 +258,7 @@ def list_dashboard_reports(
     period_type: str | None = None,
 ) -> list[DashboardReportRow]:
     """Возвращает последние сохранённые периоды для веб-дашборда."""
-    limit = max(1, min(int(limit), 100))
+    limit = max(1, min(int(limit), 250))
     where_sql = ""
     params: list[object] = []
     if period_type:
