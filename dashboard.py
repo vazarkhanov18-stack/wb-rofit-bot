@@ -116,9 +116,9 @@ UNIT_TEMPLATE = r"""
 
 UNIT_CALCULATOR_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Калькулятор юнитки · {{ title }}</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
-<header><div><h1>Калькулятор юнит-экономики</h1><div class="subtitle">Плановый расчёт товара: цена, СПП, выкуп, комиссия, логистика, реклама, налоги и чистая прибыль</div></div><div class="badge">Ручной сценарий + тарифы WB · v19</div></header>
+<header><div><h1>Калькулятор юнит-экономики</h1><div class="subtitle">Плановый расчёт товара: цена, СПП, выкуп, комиссия, логистика, реклама, налоги и чистая прибыль</div></div><div class="badge">Ручной сценарий + тарифы WB · v20</div></header>
 <nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/unit-economics">Юнит-экономика</a><a class="active" href="/unit-calculator">Калькулятор юнитки</a><a href="/admin">Себестоимость и расходы</a></nav>
-<div class="hint" style="margin:0 0 16px">Это плановый калькулятор. В v19 можно вручную считать сценарии и частично подтягивать тарифы WB: логистику, хранение и обратную логистику по складу и типу упаковки. Комиссию WB пока оставь вручную или используй фактическую долю из отчётов, потому что для точной комиссии нужен предмет/категория товара.</div>
+<div class="hint" style="margin:0 0 16px">Это плановый калькулятор. В v20 можно вручную считать сценарии, частично подтягивать тарифы WB и сохранять готовые расчёты как шаблоны прямо в браузере. Комиссию WB пока оставь вручную или используй фактическую долю из отчётов, потому что для точной комиссии нужен предмет/категория товара.</div>
 {% if tariff_notice %}<div class="notice {{ tariff_notice.kind }}">{{ tariff_notice.text }}</div>{% endif %}
 <form method="get" class="section">
 <div class="card"><div class="section-head"><div><h2>1. Основные расходы</h2><div class="subtitle">Товар, цена, СПП, выкуп, комиссия и закупка</div></div></div>
@@ -165,7 +165,21 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 <div class="field"><label>Брак, % от закупа</label><input inputmode="decimal" name="defect_pct" value="{{ percent_input(values.defect_pct) }}"></div>
 <div class="field"><label>Целевая маржа, %</label><input inputmode="decimal" name="target_margin" value="{{ percent_input(values.target_margin) }}"></div>
 </div><div class="form-actions"><button type="submit">Рассчитать юнитку</button><button class="secondary" type="submit" name="autoload_tariffs" value="1">Подтянуть тарифы WB</button><a class="button secondary" href="/unit-calculator">Сбросить</a></div></div>
+
 </form>
+
+<div class="section card" id="scenarioBox">
+  <div class="section-head"><div><h2>Сценарии калькулятора</h2><div class="subtitle">Сохраняй разные варианты цены, ДРР, склада, габаритов и схемы FBS/FBW</div></div></div>
+  <div class="form-grid">
+    <div class="field"><label>Название сценария</label><input id="scenarioName" placeholder="Например: Креатин · FBS · ДРР 15%"></div>
+    <div class="field"><label>&nbsp;</label><button type="button" id="saveScenarioBtn">Сохранить текущий расчёт</button></div>
+    <div class="field"><label>&nbsp;</label><button type="button" class="secondary" id="copyScenarioBtn">Скопировать ссылку</button></div>
+    <div class="field"><label>&nbsp;</label><button type="button" class="secondary" id="exportScenarioBtn">Экспорт JSON</button></div>
+  </div>
+  <div id="scenarioMessage" class="hint" style="display:none"></div>
+  <div class="table-wrap" style="margin-top:12px"><table style="min-width:930px"><thead><tr><th>Название</th><th>Товар</th><th>Схема</th><th>Цена</th><th>ДРР</th><th>Дата</th><th>Действия</th></tr></thead><tbody id="scenarioRows"><tr><td class="empty" colspan="7">Сохранённых сценариев пока нет.</td></tr></tbody></table></div>
+  <div class="hint">Сценарии сохраняются в памяти текущего браузера. Это удобно для быстрых сравнений. Позже можно перенести их в PostgreSQL, чтобы они открывались с любого устройства.</div>
+</div>
 
 {% if calculated %}
 <div class="grid section">
@@ -184,6 +198,83 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 <div class="section two-col"><div class="card"><div class="section-head"><div><h2>Расчёт по строкам</h2><div class="subtitle">Как на калькуляторе: партия, юнитка и доля в выручке</div></div></div><div class="table-wrap"><table style="min-width:960px"><thead><tr><th>Показатель</th><th>Партия</th><th>Unit-экономика</th><th>Доля в выручке</th></tr></thead><tbody>{% for row in breakdown %}<tr><td>{{ row.label }}</td><td class="{{ row.cls }}">{{ row.batch }}</td><td class="{{ row.cls }}">{{ row.unit }}</td><td>{{ row.share }}</td></tr>{% endfor %}</tbody></table></div></div>
 <div class="card"><h2>Пояснение</h2><div class="hint"><b>Выкуп</b> влияет на логистику: логистика к покупателю делится на процент выкупа, а обратная логистика добавляется на невыкупленные заказы. <b>Прибыль до налогов</b> считается до НДС и налоговой ставки. <b>Чистая прибыль</b> уже после налогов. Базовая логистика, доплата за литр, хранение и обратная логистика могут подтягиваться из тарифов WB по складу. Приёмку и комиссию пока проверь вручную.</div><div class="summary" style="margin-top:14px"><span>Схема: {{ values.scheme|upper }}</span><span>Упаковка: {{ 'Монопаллета' if values.package_type == 'mono' else 'Короб' }}</span><span>Склад: {{ values.warehouse or 'не указан' }}</span><span>Список цена без СПП: {{ money(calc.price_before_spp) if calc.price_before_spp else '—' }}</span></div></div></div>
 {% endif %}
+
+<script>
+(function(){
+  const KEY = 'wb_unit_calc_scenarios_v20';
+  const rows = document.getElementById('scenarioRows');
+  const nameInput = document.getElementById('scenarioName');
+  const msg = document.getElementById('scenarioMessage');
+  const form = document.querySelector('form.section');
+  function ruMoney(x){ const n = Number(x || 0); return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n) + ' ₽'; }
+  function ruPct(x){ const n = Number(x || 0); return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n) + '%'; }
+  function parsePct(v){ if(!v) return 0; return Number(String(v).replace(',', '.')) || 0; }
+  function show(text){ if(!msg) return; msg.style.display='block'; msg.textContent=text; }
+  function all(){ try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e){ return []; } }
+  function saveAll(items){ localStorage.setItem(KEY, JSON.stringify(items)); }
+  function currentParams(){
+    const params = new URLSearchParams(new FormData(form));
+    params.delete('autoload_tariffs');
+    return params;
+  }
+  function titleFromParams(params){
+    const name = (params.get('product_name') || params.get('sku') || 'Новый товар').trim();
+    const scheme = (params.get('scheme') || 'fbs').toUpperCase();
+    const price = params.get('price_spp') || '0';
+    const drr = params.get('drr_pct') || '0';
+    return `${name} · ${scheme} · ${price} ₽ · ДРР ${drr}%`;
+  }
+  function render(){
+    const items = all();
+    if(!rows) return;
+    if(!items.length){ rows.innerHTML = '<tr><td class="empty" colspan="7">Сохранённых сценариев пока нет.</td></tr>'; return; }
+    rows.innerHTML = items.map((it, idx) => {
+      const p = new URLSearchParams(it.query || '');
+      const price = p.get('price_spp') || '0';
+      const drr = p.get('drr_pct') || '0';
+      const product = p.get('product_name') || p.get('sku') || '—';
+      const scheme = (p.get('scheme') || 'fbs').toUpperCase();
+      return `<tr><td>${escapeHtml(it.name || 'Без названия')}</td><td>${escapeHtml(product)}</td><td>${scheme}</td><td>${escapeHtml(price)} ₽</td><td>${escapeHtml(drr)}%</td><td>${escapeHtml(it.created_at || '')}</td><td><div class="inline-actions"><button type="button" class="small secondary" data-load="${idx}">Открыть</button><button type="button" class="small secondary" data-dup="${idx}">Дубль</button><button type="button" class="small danger" data-del="${idx}">Удалить</button></div></td></tr>`;
+    }).join('');
+  }
+  function escapeHtml(x){ return String(x || '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch])); }
+  document.getElementById('saveScenarioBtn')?.addEventListener('click', () => {
+    const params = currentParams();
+    const items = all();
+    const name = (nameInput?.value || '').trim() || titleFromParams(params);
+    const existing = items.findIndex(x => (x.name || '').trim().toLowerCase() === name.toLowerCase());
+    const item = {name, query: params.toString(), created_at: new Date().toLocaleString('ru-RU')};
+    if(existing >= 0){ items[existing] = item; show('Сценарий обновлён: ' + name); }
+    else { items.unshift(item); show('Сценарий сохранён: ' + name); }
+    saveAll(items.slice(0, 100)); render();
+  });
+  document.getElementById('copyScenarioBtn')?.addEventListener('click', async () => {
+    const url = location.origin + location.pathname + '?' + currentParams().toString();
+    try { await navigator.clipboard.writeText(url); show('Ссылка на текущий расчёт скопирована.'); }
+    catch(e){ show('Ссылка: ' + url); }
+  });
+  document.getElementById('exportScenarioBtn')?.addEventListener('click', () => {
+    const data = JSON.stringify(all(), null, 2);
+    const blob = new Blob([data], {type:'application/json;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'wb-unit-scenarios.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  rows?.addEventListener('click', ev => {
+    const btn = ev.target.closest('button'); if(!btn) return;
+    const items = all();
+    const idx = Number(btn.dataset.load ?? btn.dataset.del ?? btn.dataset.dup);
+    const item = items[idx]; if(!item) return;
+    if(btn.dataset.load !== undefined){ location.href = '/unit-calculator?' + item.query; }
+    if(btn.dataset.del !== undefined){ if(confirm('Удалить сценарий?')){ items.splice(idx,1); saveAll(items); render(); show('Сценарий удалён.'); } }
+    if(btn.dataset.dup !== undefined){ const p = new URLSearchParams(item.query); const curScheme = (p.get('scheme') || 'fbs').toLowerCase(); p.set('scheme', curScheme === 'fbs' ? 'fbw' : 'fbs'); p.set('acceptance', curScheme === 'fbs' ? (p.get('acceptance') || '0') : (p.get('acceptance') || '0')); const clone = {name: (item.name || 'Сценарий') + ' · ' + p.get('scheme').toUpperCase(), query: p.toString(), created_at: new Date().toLocaleString('ru-RU')}; items.unshift(clone); saveAll(items.slice(0,100)); render(); show('Создан дубль для сравнения FBS/FBW. Открой его и пересчитай тарифы.'); }
+  });
+  render();
+})();
+</script>
+
 <footer>WB Profit Dashboard · плановая юнит-экономика</footer></div></body></html>
 """
 
