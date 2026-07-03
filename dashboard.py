@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import logging
 import os
 import threading
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import date, datetime
 from typing import Any
 from urllib.parse import quote
@@ -112,9 +116,10 @@ UNIT_TEMPLATE = r"""
 
 UNIT_CALCULATOR_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Калькулятор юнитки · {{ title }}</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
-<header><div><h1>Калькулятор юнит-экономики</h1><div class="subtitle">Плановый расчёт товара: цена, СПП, выкуп, комиссия, логистика, реклама, налоги и чистая прибыль</div></div><div class="badge">Ручной сценарий · v18</div></header>
+<header><div><h1>Калькулятор юнит-экономики</h1><div class="subtitle">Плановый расчёт товара: цена, СПП, выкуп, комиссия, логистика, реклама, налоги и чистая прибыль</div></div><div class="badge">Ручной сценарий + тарифы WB · v19</div></header>
 <nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/unit-economics">Юнит-экономика</a><a class="active" href="/unit-calculator">Калькулятор юнитки</a><a href="/admin">Себестоимость и расходы</a></nav>
-<div class="hint" style="margin:0 0 16px">Это плановый калькулятор. В v18 тарифы вводятся вручную, чтобы быстро проверять гипотезы по цене, ДРР, логистике и поставке. Следующим этапом можно подключить автоподтягивание тарифов WB по API.</div>
+<div class="hint" style="margin:0 0 16px">Это плановый калькулятор. В v19 можно вручную считать сценарии и частично подтягивать тарифы WB: логистику, хранение и обратную логистику по складу и типу упаковки. Комиссию WB пока оставь вручную или используй фактическую долю из отчётов, потому что для точной комиссии нужен предмет/категория товара.</div>
+{% if tariff_notice %}<div class="notice {{ tariff_notice.kind }}">{{ tariff_notice.text }}</div>{% endif %}
 <form method="get" class="section">
 <div class="card"><div class="section-head"><div><h2>1. Основные расходы</h2><div class="subtitle">Товар, цена, СПП, выкуп, комиссия и закупка</div></div></div>
 <div class="form-grid">
@@ -133,6 +138,7 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 <div class="form-grid">
 <div class="field"><label>Тип упаковки</label><select name="package_type"><option value="box" {% if values.package_type == 'box' %}selected{% endif %}>Короб</option><option value="mono" {% if values.package_type == 'mono' %}selected{% endif %}>Монопаллета</option></select></div>
 <div class="field"><label>Склад</label><input name="warehouse" value="{{ values.warehouse }}" placeholder="Например, Коледино / Электросталь"></div>
+<div class="field"><label>Дата тарифов WB</label><input type="date" name="tariff_date" value="{{ values.tariff_date }}"></div>
 <div class="field"><label>Индекс локализации, %</label><input inputmode="decimal" name="localization_pct" value="{{ percent_input(values.localization_pct) }}"></div>
 <div class="field"><label>ИРП / коэффициент</label><input inputmode="decimal" name="irp" value="{{ number_input(values.irp) }}"></div>
 <div class="field"><label>Длина, см</label><input inputmode="decimal" name="length_cm" value="{{ number_input(values.length_cm) }}"></div>
@@ -158,7 +164,7 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 <div class="field"><label>Прочие расходы / шт., ₽</label><input inputmode="decimal" name="other_cost" value="{{ number_input(values.other_cost) }}"></div>
 <div class="field"><label>Брак, % от закупа</label><input inputmode="decimal" name="defect_pct" value="{{ percent_input(values.defect_pct) }}"></div>
 <div class="field"><label>Целевая маржа, %</label><input inputmode="decimal" name="target_margin" value="{{ percent_input(values.target_margin) }}"></div>
-</div><div class="form-actions"><button type="submit">Рассчитать юнитку</button><a class="button secondary" href="/unit-calculator">Сбросить</a></div></div>
+</div><div class="form-actions"><button type="submit">Рассчитать юнитку</button><button class="secondary" type="submit" name="autoload_tariffs" value="1">Подтянуть тарифы WB</button><a class="button secondary" href="/unit-calculator">Сбросить</a></div></div>
 </form>
 
 {% if calculated %}
@@ -176,7 +182,7 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 </div>
 
 <div class="section two-col"><div class="card"><div class="section-head"><div><h2>Расчёт по строкам</h2><div class="subtitle">Как на калькуляторе: партия, юнитка и доля в выручке</div></div></div><div class="table-wrap"><table style="min-width:960px"><thead><tr><th>Показатель</th><th>Партия</th><th>Unit-экономика</th><th>Доля в выручке</th></tr></thead><tbody>{% for row in breakdown %}<tr><td>{{ row.label }}</td><td class="{{ row.cls }}">{{ row.batch }}</td><td class="{{ row.cls }}">{{ row.unit }}</td><td>{{ row.share }}</td></tr>{% endfor %}</tbody></table></div></div>
-<div class="card"><h2>Пояснение</h2><div class="hint"><b>Выкуп</b> влияет на логистику: логистика к покупателю делится на процент выкупа, а обратная логистика добавляется на невыкупленные заказы. <b>Прибыль до налогов</b> считается до НДС и налоговой ставки. <b>Чистая прибыль</b> уже после налогов. Расчёт тарифов WB пока ручной: базовая логистика, доплата за литр, хранение и приёмка вводятся в форме.</div><div class="summary" style="margin-top:14px"><span>Схема: {{ values.scheme|upper }}</span><span>Упаковка: {{ 'Монопаллета' if values.package_type == 'mono' else 'Короб' }}</span><span>Склад: {{ values.warehouse or 'не указан' }}</span><span>Список цена без СПП: {{ money(calc.price_before_spp) if calc.price_before_spp else '—' }}</span></div></div></div>
+<div class="card"><h2>Пояснение</h2><div class="hint"><b>Выкуп</b> влияет на логистику: логистика к покупателю делится на процент выкупа, а обратная логистика добавляется на невыкупленные заказы. <b>Прибыль до налогов</b> считается до НДС и налоговой ставки. <b>Чистая прибыль</b> уже после налогов. Базовая логистика, доплата за литр, хранение и обратная логистика могут подтягиваться из тарифов WB по складу. Приёмку и комиссию пока проверь вручную.</div><div class="summary" style="margin-top:14px"><span>Схема: {{ values.scheme|upper }}</span><span>Упаковка: {{ 'Монопаллета' if values.package_type == 'mono' else 'Короб' }}</span><span>Склад: {{ values.warehouse or 'не указан' }}</span><span>Список цена без СПП: {{ money(calc.price_before_spp) if calc.price_before_spp else '—' }}</span></div></div></div>
 {% endif %}
 <footer>WB Profit Dashboard · плановая юнит-экономика</footer></div></body></html>
 """
@@ -442,6 +448,162 @@ def _unit_economy_row(row, *, target_margin: float, scenario_drr: float) -> dict
     }
 
 
+
+TARIFF_BOX_URL = "https://common-api.wildberries.ru/api/v1/tariffs/box"
+TARIFF_PALLET_URL = "https://common-api.wildberries.ru/api/v1/tariffs/pallet"
+TARIFF_RETURN_URL = "https://common-api.wildberries.ru/api/v1/tariffs/return"
+
+
+def _query_tariff_date() -> str:
+    raw = request.args.get("tariff_date", "").strip()
+    try:
+        if raw:
+            return date.fromisoformat(raw).isoformat()
+    except ValueError:
+        pass
+    return date.today().isoformat()
+
+
+def _ru_float(value: Any) -> float:
+    if value is None:
+        return 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip().replace("\u00a0", " ")
+    text = text.replace("руб.", "").replace("₽", "").replace("%", "").strip()
+    text = text.replace(" ", "").replace(",", ".")
+    try:
+        return float(text)
+    except ValueError:
+        return 0.0
+
+
+def _wb_tariff_headers() -> dict[str, str]:
+    token = os.getenv("WB_API_TOKEN", "").strip()
+    if not token:
+        raise RuntimeError("WB_API_TOKEN не задан в Railway Variables.")
+    return {
+        "Authorization": token,
+        "Accept": "application/json",
+        "User-Agent": "WB-Profit-Dashboard/19.0",
+    }
+
+
+def _wb_get_json(url: str, params: dict[str, str]) -> Any:
+    query = urllib.parse.urlencode(params)
+    req = urllib.request.Request(f"{url}?{query}", headers=_wb_tariff_headers(), method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=25) as resp:
+            raw = resp.read().decode("utf-8")
+            return json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as exc:
+        retry = exc.headers.get("X-Ratelimit-Retry") or exc.headers.get("Retry-After")
+        if exc.code == 401:
+            raise RuntimeError("WB отклонил токен. Проверь WB_API_TOKEN.") from exc
+        if exc.code == 429:
+            raise RuntimeError(f"Слишком частый запрос к тарифам WB. Повтори позже{f' через {retry} сек.' if retry else '.'}") from exc
+        raise RuntimeError(f"WB вернул ошибку {exc.code} при загрузке тарифов.") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError("Не удалось соединиться с WB API тарифов.") from exc
+    except TimeoutError as exc:
+        raise RuntimeError("WB API тарифов не ответил вовремя.") from exc
+
+
+def _warehouse_rows(payload: Any) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+    response = payload.get("response")
+    data = response.get("data") if isinstance(response, dict) else payload.get("data")
+    if isinstance(data, dict) and isinstance(data.get("warehouseList"), list):
+        return [r for r in data.get("warehouseList") if isinstance(r, dict)]
+    if isinstance(payload.get("warehouseList"), list):
+        return [r for r in payload.get("warehouseList") if isinstance(r, dict)]
+    return []
+
+
+def _find_warehouse(rows: list[dict[str, Any]], query: str) -> dict[str, Any] | None:
+    q = (query or "").strip().casefold()
+    if not q:
+        return None
+    for row in rows:
+        name = str(row.get("warehouseName") or row.get("name") or "").casefold()
+        if name == q:
+            return row
+    for row in rows:
+        name = str(row.get("warehouseName") or row.get("name") or "").casefold()
+        if q in name or name in q:
+            return row
+    return None
+
+
+def _apply_wb_tariffs(values: DotDict) -> tuple[DotDict, DotDict]:
+    warehouse = str(values.warehouse or "").strip()
+    if not warehouse:
+        return values, DotDict({"kind": "error", "text": "Укажи склад, например Коледино или Электросталь, затем нажми «Подтянуть тарифы WB»."})
+    tariff_date = str(values.tariff_date or date.today().isoformat())
+    package_type = str(values.package_type or "box")
+    try:
+        if package_type == "mono":
+            payload = _wb_get_json(TARIFF_PALLET_URL, {"date": tariff_date})
+            rows = _warehouse_rows(payload)
+            row = _find_warehouse(rows, warehouse)
+            if row is None:
+                names = ", ".join(str(r.get("warehouseName")) for r in rows[:8] if r.get("warehouseName"))
+                return values, DotDict({"kind": "error", "text": f"Склад «{warehouse}» не найден в тарифах паллет. Примеры складов: {names or 'нет данных'}."})
+            values.base_logistics = _ru_float(row.get("palletDeliveryValueBase")) or values.base_logistics
+            values.extra_liter_cost = _ru_float(row.get("palletDeliveryValueLiter")) or values.extra_liter_cost
+            coef = _ru_float(row.get("palletDeliveryExpr"))
+            if coef:
+                values.localization_pct = coef / 100.0
+            storage_value = _ru_float(row.get("palletStorageValueExpr"))
+            if storage_value:
+                values.storage_per_day = storage_value
+        else:
+            payload = _wb_get_json(TARIFF_BOX_URL, {"date": tariff_date})
+            rows = _warehouse_rows(payload)
+            row = _find_warehouse(rows, warehouse)
+            if row is None:
+                names = ", ".join(str(r.get("warehouseName")) for r in rows[:8] if r.get("warehouseName"))
+                return values, DotDict({"kind": "error", "text": f"Склад «{warehouse}» не найден в тарифах коробов. Примеры складов: {names or 'нет данных'}."})
+            if str(values.scheme or "fbs") == "fbs":
+                base_key, liter_key, coef_key = "boxDeliveryMarketplaceBase", "boxDeliveryMarketplaceLiter", "boxDeliveryMarketplaceCoefExpr"
+            else:
+                base_key, liter_key, coef_key = "boxDeliveryBase", "boxDeliveryLiter", "boxDeliveryCoefExpr"
+            values.base_logistics = _ru_float(row.get(base_key)) or _ru_float(row.get("boxDeliveryBase")) or values.base_logistics
+            values.extra_liter_cost = _ru_float(row.get(liter_key)) or _ru_float(row.get("boxDeliveryLiter")) or values.extra_liter_cost
+            coef = _ru_float(row.get(coef_key)) or _ru_float(row.get("boxDeliveryCoefExpr"))
+            if coef:
+                values.localization_pct = coef / 100.0
+            storage_base = _ru_float(row.get("boxStorageBase"))
+            storage_liter = _ru_float(row.get("boxStorageLiter"))
+            volume = max(0.0, float(values.length_cm or 0) * float(values.width_cm or 0) * float(values.height_cm or 0) / 1000.0)
+            if storage_base or storage_liter:
+                values.storage_per_day = storage_base + max(0.0, volume - 1.0) * storage_liter
+
+        try:
+            ret_payload = _wb_get_json(TARIFF_RETURN_URL, {"date": tariff_date})
+            ret_row = _find_warehouse(_warehouse_rows(ret_payload), warehouse)
+            if ret_row:
+                values.return_logistics = (
+                    _ru_float(ret_row.get("deliveryDumpSrgReturnExpr"))
+                    or _ru_float(ret_row.get("deliveryDumpSupReturnExpr"))
+                    or _ru_float(ret_row.get("deliveryDumpKgtReturnExpr"))
+                    or values.return_logistics
+                )
+        except RuntimeError:
+            # Возврат не критичен для расчёта, оставляем прежнее значение.
+            pass
+        msg = (
+            f"Подтянул тарифы WB для склада «{warehouse}» на {tariff_date}: "
+            f"база логистики {values.base_logistics:g} ₽, доп. литр {values.extra_liter_cost:g} ₽, "
+            f"коэф. {values.localization_pct * 100:g}%, хранение {values.storage_per_day:g} ₽/день, "
+            f"обратная логистика {values.return_logistics:g} ₽. Проверь комиссию и приёмку вручную."
+        )
+        return values, DotDict({"kind": "ok", "text": msg})
+    except RuntimeError as exc:
+        return values, DotDict({"kind": "error", "text": str(exc)})
+
+
 class DotDict(dict):
     __getattr__ = dict.get
 
@@ -470,6 +632,7 @@ def _unit_calculator_values(product_summary=None) -> DotDict:
         "purchase_price": _query_float("purchase_price", _div(cogs, units)),
         "package_type": request.args.get("package_type", "box").strip().lower() if request.args.get("package_type", "box").strip().lower() in {"box", "mono"} else "box",
         "warehouse": request.args.get("warehouse", "").strip()[:100],
+        "tariff_date": _query_tariff_date(),
         "localization_pct": _query_rate("localization_pct", 1, min_value=0, max_value=10),
         "irp": max(0.0, _query_float("irp", 1)),
         "length_cm": max(0.0, _query_float("length_cm", 0)),
@@ -779,6 +942,9 @@ def unit_calculator():
         key = selected_sku.casefold()
         product_summary = next((p for p in products if (p.sku or "").casefold() == key), None)
     values = _unit_calculator_values(product_summary)
+    tariff_notice = None
+    if request.args.get("autoload_tariffs"):
+        values, tariff_notice = _apply_wb_tariffs(values)
     calculated = bool(request.args)
     calc, breakdown = _calculate_unit_plan(values) if calculated else (DotDict(), [])
     return render_template_string(
@@ -786,6 +952,7 @@ def unit_calculator():
         title=os.getenv("DASHBOARD_TITLE", "WB Profit Dashboard").strip() or "WB Profit Dashboard",
         products=products,
         values=values,
+        tariff_notice=tariff_notice,
         calculated=calculated,
         calc=calc,
         breakdown=breakdown,
