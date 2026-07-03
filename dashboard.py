@@ -16,6 +16,9 @@ from urllib.parse import quote
 from flask import Flask, Response, redirect, render_template_string, request, url_for
 from waitress import serve
 
+import psycopg
+from psycopg.rows import dict_row
+
 from wb_db import (
     database_enabled,
     get_dashboard_report,
@@ -169,7 +172,7 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 </form>
 
 <div class="section card" id="scenarioBox">
-  <div class="section-head"><div><h2>Сценарии калькулятора</h2><div class="subtitle">Сохраняй разные варианты цены, ДРР, склада, габаритов и схемы FBS/FBW</div></div></div>
+  <div class="section-head"><div><h2>Сценарии калькулятора</h2><div class="subtitle">Сохраняй разные варианты цены, ДРР, склада, габаритов и схемы FBS/FBW в PostgreSQL</div></div></div>
   <div class="form-grid">
     <div class="field"><label>Название сценария</label><input id="scenarioName" placeholder="Например: Креатин · FBS · ДРР 15%"></div>
     <div class="field"><label>&nbsp;</label><button type="button" id="saveScenarioBtn">Сохранить текущий расчёт</button></div>
@@ -178,7 +181,7 @@ UNIT_CALCULATOR_TEMPLATE = r"""
   </div>
   <div id="scenarioMessage" class="hint" style="display:none"></div>
   <div class="table-wrap" style="margin-top:12px"><table style="min-width:930px"><thead><tr><th>Название</th><th>Товар</th><th>Схема</th><th>Цена</th><th>ДРР</th><th>Дата</th><th>Действия</th></tr></thead><tbody id="scenarioRows"><tr><td class="empty" colspan="7">Сохранённых сценариев пока нет.</td></tr></tbody></table></div>
-  <div class="hint">Сценарии сохраняются в памяти текущего браузера. Это удобно для быстрых сравнений. Позже можно перенести их в PostgreSQL, чтобы они открывались с любого устройства.</div>
+  <div class="hint">Сценарии сохраняются в PostgreSQL и доступны с любого устройства после входа в дашборд.</div>
 </div>
 
 {% if calculated %}
@@ -201,22 +204,15 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 
 <script>
 (function(){
-  const KEY = 'wb_unit_calc_scenarios_v20';
   const rows = document.getElementById('scenarioRows');
   const nameInput = document.getElementById('scenarioName');
   const msg = document.getElementById('scenarioMessage');
   const form = document.querySelector('form.section');
-  function ruMoney(x){ const n = Number(x || 0); return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n) + ' ₽'; }
-  function ruPct(x){ const n = Number(x || 0); return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n) + '%'; }
-  function parsePct(v){ if(!v) return 0; return Number(String(v).replace(',', '.')) || 0; }
+  let items = [];
+
   function show(text){ if(!msg) return; msg.style.display='block'; msg.textContent=text; }
-  function all(){ try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e){ return []; } }
-  function saveAll(items){ localStorage.setItem(KEY, JSON.stringify(items)); }
-  function currentParams(){
-    const params = new URLSearchParams(new FormData(form));
-    params.delete('autoload_tariffs');
-    return params;
-  }
+  function escapeHtml(x){ return String(x || '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch])); }
+  function currentParams(){ const params = new URLSearchParams(new FormData(form)); params.delete('autoload_tariffs'); return params; }
   function titleFromParams(params){
     const name = (params.get('product_name') || params.get('sku') || 'Новый товар').trim();
     const scheme = (params.get('scheme') || 'fbs').toUpperCase();
@@ -224,8 +220,21 @@ UNIT_CALCULATOR_TEMPLATE = r"""
     const drr = params.get('drr_pct') || '0';
     return `${name} · ${scheme} · ${price} ₽ · ДРР ${drr}%`;
   }
+  async function api(path, opts){
+    const res = await fetch(path, Object.assign({headers:{'Content-Type':'application/json'}}, opts || {}));
+    if(!res.ok){
+      let text = await res.text();
+      try { const data = JSON.parse(text); text = data.error || text; } catch(e) {}
+      throw new Error(text || ('HTTP ' + res.status));
+    }
+    if(res.status === 204) return null;
+    return await res.json();
+  }
+  async function loadScenarios(){
+    try { const data = await api('/api/unit-scenarios'); items = data.items || []; render(); }
+    catch(e){ show('Не удалось загрузить сценарии: ' + e.message); render(); }
+  }
   function render(){
-    const items = all();
     if(!rows) return;
     if(!items.length){ rows.innerHTML = '<tr><td class="empty" colspan="7">Сохранённых сценариев пока нет.</td></tr>'; return; }
     rows.innerHTML = items.map((it, idx) => {
@@ -234,19 +243,18 @@ UNIT_CALCULATOR_TEMPLATE = r"""
       const drr = p.get('drr_pct') || '0';
       const product = p.get('product_name') || p.get('sku') || '—';
       const scheme = (p.get('scheme') || 'fbs').toUpperCase();
-      return `<tr><td>${escapeHtml(it.name || 'Без названия')}</td><td>${escapeHtml(product)}</td><td>${scheme}</td><td>${escapeHtml(price)} ₽</td><td>${escapeHtml(drr)}%</td><td>${escapeHtml(it.created_at || '')}</td><td><div class="inline-actions"><button type="button" class="small secondary" data-load="${idx}">Открыть</button><button type="button" class="small secondary" data-dup="${idx}">Дубль</button><button type="button" class="small danger" data-del="${idx}">Удалить</button></div></td></tr>`;
+      const date = it.updated_at || it.created_at || '';
+      return `<tr><td>${escapeHtml(it.name || 'Без названия')}</td><td>${escapeHtml(product)}</td><td>${scheme}</td><td>${escapeHtml(price)} ₽</td><td>${escapeHtml(drr)}%</td><td>${escapeHtml(date)}</td><td><div class="inline-actions"><button type="button" class="small secondary" data-load="${idx}">Открыть</button><button type="button" class="small secondary" data-dup="${idx}">Дубль</button><button type="button" class="small danger" data-del="${idx}">Удалить</button></div></td></tr>`;
     }).join('');
   }
-  function escapeHtml(x){ return String(x || '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch])); }
-  document.getElementById('saveScenarioBtn')?.addEventListener('click', () => {
+  document.getElementById('saveScenarioBtn')?.addEventListener('click', async () => {
     const params = currentParams();
-    const items = all();
     const name = (nameInput?.value || '').trim() || titleFromParams(params);
-    const existing = items.findIndex(x => (x.name || '').trim().toLowerCase() === name.toLowerCase());
-    const item = {name, query: params.toString(), created_at: new Date().toLocaleString('ru-RU')};
-    if(existing >= 0){ items[existing] = item; show('Сценарий обновлён: ' + name); }
-    else { items.unshift(item); show('Сценарий сохранён: ' + name); }
-    saveAll(items.slice(0, 100)); render();
+    try {
+      const item = await api('/api/unit-scenarios', {method:'POST', body: JSON.stringify({name, query: params.toString()})});
+      show('Сценарий сохранён в PostgreSQL: ' + item.name);
+      await loadScenarios();
+    } catch(e){ show('Не удалось сохранить сценарий: ' + e.message); }
   });
   document.getElementById('copyScenarioBtn')?.addEventListener('click', async () => {
     const url = location.origin + location.pathname + '?' + currentParams().toString();
@@ -254,24 +262,31 @@ UNIT_CALCULATOR_TEMPLATE = r"""
     catch(e){ show('Ссылка: ' + url); }
   });
   document.getElementById('exportScenarioBtn')?.addEventListener('click', () => {
-    const data = JSON.stringify(all(), null, 2);
+    const data = JSON.stringify(items, null, 2);
     const blob = new Blob([data], {type:'application/json;charset=utf-8'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'wb-unit-scenarios.json';
+    a.download = 'wb-unit-scenarios-postgres.json';
     a.click();
     URL.revokeObjectURL(a.href);
   });
-  rows?.addEventListener('click', ev => {
+  rows?.addEventListener('click', async ev => {
     const btn = ev.target.closest('button'); if(!btn) return;
-    const items = all();
     const idx = Number(btn.dataset.load ?? btn.dataset.del ?? btn.dataset.dup);
     const item = items[idx]; if(!item) return;
-    if(btn.dataset.load !== undefined){ location.href = '/unit-calculator?' + item.query; }
-    if(btn.dataset.del !== undefined){ if(confirm('Удалить сценарий?')){ items.splice(idx,1); saveAll(items); render(); show('Сценарий удалён.'); } }
-    if(btn.dataset.dup !== undefined){ const p = new URLSearchParams(item.query); const curScheme = (p.get('scheme') || 'fbs').toLowerCase(); p.set('scheme', curScheme === 'fbs' ? 'fbw' : 'fbs'); p.set('acceptance', curScheme === 'fbs' ? (p.get('acceptance') || '0') : (p.get('acceptance') || '0')); const clone = {name: (item.name || 'Сценарий') + ' · ' + p.get('scheme').toUpperCase(), query: p.toString(), created_at: new Date().toLocaleString('ru-RU')}; items.unshift(clone); saveAll(items.slice(0,100)); render(); show('Создан дубль для сравнения FBS/FBW. Открой его и пересчитай тарифы.'); }
+    if(btn.dataset.load !== undefined){ location.href = '/unit-calculator?' + item.query; return; }
+    if(btn.dataset.del !== undefined){
+      if(!confirm('Удалить сценарий из PostgreSQL?')) return;
+      try { await api('/api/unit-scenarios/' + item.id, {method:'DELETE'}); show('Сценарий удалён.'); await loadScenarios(); }
+      catch(e){ show('Не удалось удалить сценарий: ' + e.message); }
+      return;
+    }
+    if(btn.dataset.dup !== undefined){
+      try { const clone = await api('/api/unit-scenarios/' + item.id + '/duplicate', {method:'POST'}); show('Создан дубль для сравнения FBS/FBW: ' + clone.name); await loadScenarios(); }
+      catch(e){ show('Не удалось создать дубль: ' + e.message); }
+    }
   });
-  render();
+  loadScenarios();
 })();
 </script>
 
@@ -1209,6 +1224,153 @@ def admin_expense_delete():
         return _admin_redirect(ok="Внешний расход удалён. При необходимости запусти /backfill.")
     except Exception as exc:
         return _admin_redirect(error=str(exc))
+
+
+
+def _json(data: dict[str, Any], status: int = 200) -> Response:
+    return Response(json.dumps(data, ensure_ascii=False), status, {"Content-Type": "application/json; charset=utf-8"})
+
+
+def _scenario_connect():
+    url = os.getenv("DATABASE_URL", "").strip()
+    if not url:
+        raise RuntimeError("DATABASE_URL не задан.")
+    return psycopg.connect(url, connect_timeout=12, row_factory=dict_row)
+
+
+def _ensure_scenario_table() -> None:
+    with _scenario_connect() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS unit_calc_scenarios (
+                    id BIGSERIAL PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    query TEXT NOT NULL DEFAULT '',
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_unit_calc_scenarios_updated ON unit_calc_scenarios(updated_at DESC)"
+            )
+
+
+def _scenario_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "name": row.get("name") or "",
+        "query": row.get("query") or "",
+        "created_at": row["created_at"].strftime("%d.%m.%Y %H:%M") if row.get("created_at") else "",
+        "updated_at": row["updated_at"].strftime("%d.%m.%Y %H:%M") if row.get("updated_at") else "",
+    }
+
+
+@app.get("/api/unit-scenarios")
+def api_unit_scenarios_list():
+    if not database_enabled():
+        return _json({"error": "DATABASE_URL не задан."}, 503)
+    try:
+        _ensure_scenario_table()
+        with _scenario_connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT id, name, query, created_at, updated_at
+                    FROM unit_calc_scenarios
+                    ORDER BY updated_at DESC, id DESC
+                    LIMIT 300
+                    """
+                )
+                return _json({"items": [_scenario_payload(row) for row in cursor.fetchall()]})
+    except Exception as exc:
+        logger.exception("Не удалось получить сценарии юнитки")
+        return _json({"error": str(exc)}, 500)
+
+
+@app.post("/api/unit-scenarios")
+def api_unit_scenarios_save():
+    if not database_enabled():
+        return _json({"error": "DATABASE_URL не задан."}, 503)
+    try:
+        data = request.get_json(silent=True) or {}
+        name = str(data.get("name") or "").strip()
+        query = str(data.get("query") or "").strip()
+        if not name:
+            return _json({"error": "Название сценария обязательно."}, 400)
+        if len(name) > 180:
+            name = name[:180]
+        _ensure_scenario_table()
+        with _scenario_connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO unit_calc_scenarios (name, query)
+                    VALUES (%s, %s)
+                    ON CONFLICT (name)
+                    DO UPDATE SET query = EXCLUDED.query, updated_at = NOW()
+                    RETURNING id, name, query, created_at, updated_at
+                    """,
+                    (name, query),
+                )
+                row = cursor.fetchone()
+                return _json(_scenario_payload(row))
+    except Exception as exc:
+        logger.exception("Не удалось сохранить сценарий юнитки")
+        return _json({"error": str(exc)}, 500)
+
+
+@app.post("/api/unit-scenarios/<int:scenario_id>/duplicate")
+def api_unit_scenarios_duplicate(scenario_id: int):
+    if not database_enabled():
+        return _json({"error": "DATABASE_URL не задан."}, 503)
+    try:
+        _ensure_scenario_table()
+        with _scenario_connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT name, query FROM unit_calc_scenarios WHERE id = %s", (scenario_id,))
+                row = cursor.fetchone()
+                if not row:
+                    return _json({"error": "Сценарий не найден."}, 404)
+                params = urllib.parse.parse_qs(row["query"] or "", keep_blank_values=True)
+                flat = urllib.parse.parse_qsl(row["query"] or "", keep_blank_values=True)
+                p = urllib.parse.urlencode([(k, ("fbw" if k == "scheme" and v.lower() == "fbs" else "fbs" if k == "scheme" and v.lower() == "fbw" else v)) for k, v in flat])
+                old_scheme = (params.get("scheme", ["fbs"])[0] or "fbs").upper()
+                new_scheme = "FBW" if old_scheme == "FBS" else "FBS"
+                base_name = (row["name"] or "Сценарий").strip()
+                name = f"{base_name} · {new_scheme}"
+                # если такой дубль уже есть, добавляем время, чтобы не перезаписать старый вариант
+                cursor.execute("SELECT 1 FROM unit_calc_scenarios WHERE name = %s", (name,))
+                if cursor.fetchone():
+                    name = f"{name} · {datetime.now().strftime('%d.%m %H:%M')}"
+                cursor.execute(
+                    """
+                    INSERT INTO unit_calc_scenarios (name, query)
+                    VALUES (%s, %s)
+                    RETURNING id, name, query, created_at, updated_at
+                    """,
+                    (name, p),
+                )
+                return _json(_scenario_payload(cursor.fetchone()))
+    except Exception as exc:
+        logger.exception("Не удалось продублировать сценарий юнитки")
+        return _json({"error": str(exc)}, 500)
+
+
+@app.delete("/api/unit-scenarios/<int:scenario_id>")
+def api_unit_scenarios_delete(scenario_id: int):
+    if not database_enabled():
+        return _json({"error": "DATABASE_URL не задан."}, 503)
+    try:
+        _ensure_scenario_table()
+        with _scenario_connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM unit_calc_scenarios WHERE id = %s", (scenario_id,))
+        return Response("", 204)
+    except Exception as exc:
+        logger.exception("Не удалось удалить сценарий юнитки")
+        return _json({"error": str(exc)}, 500)
 
 
 def start_dashboard_server() -> None:
