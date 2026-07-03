@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -9,7 +10,7 @@ import threading
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
 
@@ -27,6 +28,13 @@ from wb_db import (
     list_dashboard_skus,
     list_product_periods,
     list_product_summaries,
+)
+from wb_api import (
+    WbApiError,
+    get_product_cards,
+    get_seller_warehouse_stocks,
+    get_seller_warehouses,
+    get_wb_warehouse_stocks,
 )
 from wb_management import (
     delete_cost_profile,
@@ -64,7 +72,7 @@ table{width:100%;border-collapse:collapse;min-width:1050px}th,td{padding:11px 10
 DASHBOARD_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>{{ title }}</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>{{ title }}</h1><div class="subtitle">Финансы Wildberries · история себестоимости · внешний P&amp;L</div></div><div class="badge">Последнее сохранение: {{ latest_created }}</div></header>
-<nav class="nav"><a class="active" href="/">Дашборд</a><a href="/products">Товары</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a class="active" href="/">Дашборд</a><a href="/products">Товары</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><select name="period_type" aria-label="Тип периода"><option value="" {% if not selected_type %}selected{% endif %}>Все сохранённые периоды</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Загруженные Excel</option></select><button type="submit">Показать</button></form>
 {% if latest %}<div class="grid">
 <div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(latest.revenue) }}</div></div><div class="card"><div class="label">Расчётная выплата</div><div class="value">{{ money(latest.payout) }}</div></div><div class="card"><div class="label">Прибыль до налога</div><div class="value {{ 'good' if latest.profit_before_tax >= 0 else 'bad' }}">{{ money(latest.profit_before_tax) }}</div></div><div class="card"><div class="label">УСН 6%</div><div class="value">{{ money(latest.tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if latest.profit >= 0 else 'bad' }}">{{ money(latest.profit) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(latest.cogs) }}</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(latest.external_expenses) }}</div></div><div class="card"><div class="label">Реклама WB</div><div class="value">{{ money(latest.advertising) }}</div></div><div class="card"><div class="label">ДРР / Маржа</div><div class="value {{ margin_class(latest.margin) }}">{{ percent(latest.drr) }} / {{ percent(latest.margin) }}</div></div><div class="card"><div class="label">Продано</div><div class="value">{{ units(latest.units) }} шт.</div></div></div>
@@ -80,7 +88,7 @@ DASHBOARD_TEMPLATE = r"""
 PRODUCTS_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Товары · {{ title }}</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Аналитика по товарам</h1><div class="subtitle">Прибыль, маржа и ДРР каждого SKU за выбранные сохранённые периоды</div></div><div class="badge">Найдено товаров: {{ totals.products }}</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a class="active" href="/products">Товары</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a class="active" href="/products">Товары</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><label>Периоды<select name="period_type"><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select></label><label>С даты<input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату<input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск<input name="q" value="{{ query }}" placeholder="Название, артикул или nmID"></label><button type="submit">Показать</button>{% if query or date_from_value or date_to_value %}<a class="button secondary" href="/products?period_type={{ selected_type }}">Сбросить</a>{% endif %}</form>
 <div class="hint">Чтобы суммы не задваивались, здесь одновременно используется только один тип периодов. По умолчанию выбраны закрытые недельные отчёты.</div>
 {% if rows %}<div class="grid section"><div class="card"><div class="label">Товаров</div><div class="value">{{ totals.products }}</div></div><div class="card"><div class="label">Продано</div><div class="value">{{ units(totals.units) }} шт.</div></div><div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(totals.revenue) }}</div></div><div class="card"><div class="label">Прибыль до налога</div><div class="value {{ 'good' if totals.profit_before_tax >= 0 else 'bad' }}">{{ money(totals.profit_before_tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if totals.profit >= 0 else 'bad' }}">{{ money(totals.profit) }}</div></div><div class="card"><div class="label">Маржа</div><div class="value {{ margin_class(totals.margin) }}">{{ percent(totals.margin) }}</div></div><div class="card"><div class="label">Реклама WB</div><div class="value">{{ money(totals.advertising) }}</div></div><div class="card"><div class="label">ДРР</div><div class="value">{{ percent(totals.drr) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(totals.cogs) }}</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(totals.external_expenses) }}</div></div></div>
@@ -106,7 +114,7 @@ PRODUCT_DETAIL_TEMPLATE = r"""
 UNIT_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Юнит-экономика · {{ title }}</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Юнит-экономика</h1><div class="subtitle">Цена, выплата WB, расходы, налог, реклама, маржа и точка безубыточности по каждому SKU</div></div><div class="badge">Товаров: {{ totals.products }}</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a class="active" href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a class="active" href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><label>Периоды<select name="period_type"><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select></label><label>С даты<input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату<input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск<input name="q" value="{{ query }}" placeholder="Название, артикул или nmID"></label><label>Целевая маржа, %<input inputmode="decimal" name="target_margin" value="{{ target_margin_input }}"></label><label>Сценарий ДРР, %<input inputmode="decimal" name="scenario_drr" value="{{ scenario_drr_input }}"></label><button type="submit">Пересчитать</button></form>
 <div class="hint">Расчёт основан на сохранённых отчётах PostgreSQL. Для корректности используй один тип периодов, лучше <b>недельные</b>, чтобы не смешивать дневные и недельные отчёты. Точка безубыточности считается приблизительно: предполагается, что доля выплаты WB от цены остаётся такой же, как в выбранном периоде.</div>
 {% if rows %}<div class="grid section"><div class="card"><div class="label">Продано</div><div class="value">{{ units(totals.units) }} шт.</div></div><div class="card"><div class="label">Средняя цена</div><div class="value">{{ money(totals.avg_price) }}</div></div><div class="card"><div class="label">Прибыль / шт.</div><div class="value {{ 'good' if totals.profit_per_unit >= 0 else 'bad' }}">{{ money(totals.profit_per_unit) }}</div></div><div class="card"><div class="label">Маржа</div><div class="value {{ margin_class(totals.margin) }}">{{ percent(totals.margin) }}</div></div><div class="card"><div class="label">ДРР</div><div class="value">{{ percent(totals.drr) }}</div></div><div class="card"><div class="label">Макс ДРР до нуля</div><div class="value {{ 'bad' if totals.max_drr_zero < totals.drr else 'good' }}">{{ percent(totals.max_drr_zero) }}</div></div><div class="card"><div class="label">Макс ДРР для цели</div><div class="value {{ 'bad' if totals.max_drr_target < totals.drr else 'good' }}">{{ percent(totals.max_drr_target) }}</div></div><div class="card"><div class="label">Сценарий прибыль</div><div class="value {{ 'good' if totals.scenario_profit >= 0 else 'bad' }}">{{ money(totals.scenario_profit) }}</div></div><div class="card"><div class="label">Сценарий маржа</div><div class="value {{ margin_class(totals.scenario_margin) }}">{{ percent(totals.scenario_margin) }}</div></div><div class="card"><div class="label">Товаров в минус</div><div class="value {{ 'bad' if totals.loss_products else 'good' }}">{{ totals.loss_products }}</div></div></div>
@@ -120,7 +128,7 @@ UNIT_TEMPLATE = r"""
 UNIT_CALCULATOR_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Калькулятор юнитки · {{ title }}</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Калькулятор юнит-экономики</h1><div class="subtitle">Плановый расчёт товара: цена, СПП, выкуп, комиссия, логистика, реклама, налоги и чистая прибыль</div></div><div class="badge">Ручной сценарий + тарифы WB · v20</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/unit-economics">Юнит-экономика</a><a class="active" href="/unit-calculator">Калькулятор юнитки</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/unit-economics">Юнит-экономика</a><a class="active" href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/admin">Себестоимость и расходы</a></nav>
 <div class="hint" style="margin:0 0 16px">Это плановый калькулятор. В v20 можно вручную считать сценарии, частично подтягивать тарифы WB и сохранять готовые расчёты как шаблоны прямо в браузере. Комиссию WB пока оставь вручную или используй фактическую долю из отчётов, потому что для точной комиссии нужен предмет/категория товара.</div>
 {% if tariff_notice %}<div class="notice {{ tariff_notice.kind }}">{{ tariff_notice.text }}</div>{% endif %}
 <form method="get" class="section">
@@ -293,6 +301,43 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 <footer>WB Profit Dashboard · плановая юнит-экономика</footer></div></body></html>
 """
 
+
+
+
+SUPPLY_TEMPLATE = r"""
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Поставки · WB Profit</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>""" + BASE_STYLE + r"""</head><body><div class="wrap">
+<header><div><h1>Поставки</h1><div class="subtitle">Остатки FBW/FBS · скорость продаж · дата отправки поставки · рекомендуемое количество</div></div><div class="badge">Остатки: {{ as_of }}</div></header>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a class="active" href="/supply-planner">Поставки</a><a href="/admin">Себестоимость и расходы</a></nav>
+<form class="filters" method="get">
+<label>Продажи с <input type="date" name="date_from" value="{{ date_from_value }}"></label>
+<label>по <input type="date" name="date_to" value="{{ date_to_value }}"></label>
+<label>Срок пополнения, дн. <input inputmode="numeric" name="lead_days" value="{{ lead_days }}"></label>
+<label>Страховой запас, дн. <input inputmode="numeric" name="safety_days" value="{{ safety_days }}"></label>
+<label>Целевой запас, дн. <input inputmode="numeric" name="target_days" value="{{ target_days }}"></label>
+<label>Предупреждать до, дн. <input inputmode="numeric" name="low_days" value="{{ low_days }}"></label>
+<label>Поиск <input name="q" value="{{ query }}" placeholder="товар / артикул / nmID"></label>
+<button type="submit">Обновить расчёт</button>
+</form>
+{% if error %}<div class="notice error">❌ {{ error }}</div>{% endif %}
+{% if warning %}<div class="notice error">⚠️ {{ warning }}</div>{% endif %}
+<div class="grid">
+<div class="card"><div class="label">Товаров в расчёте</div><div class="value">{{ totals.products }}</div></div>
+<div class="card"><div class="label">Критично</div><div class="value {{ 'bad' if totals.critical else 'good' }}">{{ totals.critical }}</div></div>
+<div class="card"><div class="label">Скоро поставка</div><div class="value {{ 'warn' if totals.low else 'good' }}">{{ totals.low }}</div></div>
+<div class="card"><div class="label">Остаток всего</div><div class="value">{{ units(totals.available) }} шт.</div></div>
+<div class="card"><div class="label">Рекомендуемая поставка</div><div class="value">{{ units(totals.recommended) }} шт.</div></div>
+<div class="card"><div class="label">Оценка закупа</div><div class="value">{{ money(totals.investment) }}</div></div>
+<div class="card"><div class="label">Продажи / день</div><div class="value">{{ number(totals.daily_sales) }}</div></div>
+<div class="card"><div class="label">FBW / FBS</div><div class="value">{{ units(totals.fbw) }} / {{ units(totals.fbs) }}</div></div>
+<div class="card"><div class="label">В пути к клиентам</div><div class="value">{{ units(totals.to_client) }}</div></div>
+<div class="card"><div class="label">Возвраты в пути</div><div class="value">{{ units(totals.from_client) }}</div></div>
+</div>
+
+<div class="section card"><div class="section-head"><div><h2>План поставки</h2><div class="subtitle">Расчёт использует текущие остатки WB API и продажи из сохранённых отчётов PostgreSQL</div></div></div><div class="table-wrap"><table style="min-width:1420px"><thead><tr><th>Статус</th><th>Товар</th><th>Артикул</th><th>nmID</th><th>Остаток</th><th>FBW</th><th>FBS</th><th>Продажи</th><th>Шт./день</th><th>Хватит</th><th>Отправить до</th><th>Мин. до пополнения</th><th>Реком. поставка</th><th>Закуп / шт.</th><th>Бюджет</th></tr></thead><tbody>{% for row in rows %}<tr><td class="{{ row.status_class }}">{{ row.status }}</td><td>{{ row.name }}</td><td class="muted">{{ row.sku }}</td><td>{{ row.nm_id or '—' }}</td><td>{{ units(row.available) }}</td><td>{{ units(row.fbw) }}</td><td>{{ units(row.fbs) }}</td><td>{{ units(row.sales_units) }}</td><td>{{ number(row.daily_sales) }}</td><td>{{ row.days_left_text }}</td><td>{{ row.send_by }}</td><td>{{ units(row.min_supply) }}</td><td><b>{{ units(row.recommended_supply) }}</b></td><td>{{ money(row.cogs_per_unit) if row.cogs_per_unit else '—' }}</td><td>{{ money(row.investment) if row.investment else '—' }}</td></tr>{% else %}<tr><td class="empty" colspan="15">Нет данных для расчёта. Сначала сохрани недельные отчёты через /backfill или проверь доступ WB API к остаткам.</td></tr>{% endfor %}</tbody></table></div>
+<div class="hint">Формула: рекомендуемая поставка = продажи в день × (срок пополнения + страховой запас + целевой запас) − текущий доступный остаток. Если продаж за период нет, бот показывает остаток, но не рассчитывает поставку. Закупочный бюджет берётся из сохранённой себестоимости по фактическим продажам; если продаж ещё не было, бюджет может быть пустым.</div></div>
+
+<footer>WB Profit Dashboard · планирование поставок</footer></div></body></html>
+"""
 
 ADMIN_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Управление данными · WB Profit</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
@@ -552,6 +597,115 @@ def _unit_economy_row(row, *, target_margin: float, scenario_drr: float) -> dict
         "status": status,
         "status_level": status_level,
     }
+
+
+
+
+def _query_int(name: str, default: int, *, minimum: int = 1, maximum: int = 365) -> int:
+    raw = request.args.get(name, "").strip()
+    if not raw:
+        return int(default)
+    try:
+        value = int(float(raw.replace(",", ".")))
+    except ValueError:
+        return int(default)
+    return max(minimum, min(value, maximum))
+
+
+def _norm_key(value: str) -> str:
+    return " ".join((value or "").strip().casefold().split())
+
+
+def _as_int_stock(value: Any) -> int:
+    try:
+        return int(float(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+async def _load_current_stock_records() -> tuple[dict[tuple[str, Any], dict[str, Any]], str, list[str]]:
+    token = os.getenv("WB_API_TOKEN", "").strip()
+    if not token:
+        raise RuntimeError("WB_API_TOKEN не задан в Railway Variables.")
+
+    cards, wb_rows = await asyncio.gather(get_product_cards(token), get_wb_warehouse_stocks(token))
+    card_by_nm: dict[int, Any] = {int(card.nm_id): card for card in cards if int(card.nm_id) > 0}
+    nm_by_chrt: dict[int, int] = {}
+    for card in cards:
+        for chrt_id in getattr(card, "chrt_ids", ()):
+            nm_by_chrt[int(chrt_id)] = int(card.nm_id)
+
+    records_by_nm: dict[int, dict[str, Any]] = {}
+
+    def get_record(nm_id: int) -> dict[str, Any]:
+        nm_id = int(nm_id)
+        if nm_id not in records_by_nm:
+            card = card_by_nm.get(nm_id)
+            records_by_nm[nm_id] = {
+                "nm_id": nm_id,
+                "sku": (getattr(card, "vendor_code", "") or f"WB-{nm_id}").strip(),
+                "name": (getattr(card, "title", "") or f"Товар WB {nm_id}").strip(),
+                "fbw": 0,
+                "fbs": 0,
+                "to_client": 0,
+                "from_client": 0,
+            }
+        return records_by_nm[nm_id]
+
+    for row in wb_rows:
+        if not isinstance(row, dict):
+            continue
+        try:
+            nm_id = int(row.get("nmId") or row.get("nmID") or 0)
+        except (TypeError, ValueError):
+            continue
+        if nm_id <= 0:
+            continue
+        rec = get_record(nm_id)
+        rec["fbw"] += max(0, _as_int_stock(row.get("quantity")))
+        rec["to_client"] += max(0, _as_int_stock(row.get("inWayToClient")))
+        rec["from_client"] += max(0, _as_int_stock(row.get("inWayFromClient")))
+
+    warning = ""
+    seller_names: list[str] = []
+    try:
+        warehouses = await get_seller_warehouses(token)
+        seller_names = [w.name for w in warehouses]
+        all_chrt_ids = sorted(nm_by_chrt.keys())
+        for warehouse in warehouses:
+            stock_by_chrt = await get_seller_warehouse_stocks(token, warehouse.warehouse_id, all_chrt_ids)
+            for chrt_id, amount in stock_by_chrt.items():
+                nm_id = nm_by_chrt.get(int(chrt_id))
+                if not nm_id:
+                    continue
+                get_record(nm_id)["fbs"] += max(0, int(amount or 0))
+    except Exception as exc:
+        warning = f"FBS-остатки не загружены полностью: {exc}"
+
+    result: dict[tuple[str, Any], dict[str, Any]] = {}
+    for nm_id, rec in records_by_nm.items():
+        result[("nm", nm_id)] = rec
+        if rec.get("sku"):
+            result[("sku", _norm_key(rec["sku"]))] = rec
+    return result, warning, seller_names
+
+
+def _stock_key(nm_id: int | None, sku: str) -> tuple[str, Any]:
+    if nm_id:
+        return ("nm", int(nm_id))
+    return ("sku", _norm_key(sku))
+
+
+def _fmt_days(value: float | None) -> str:
+    if value is None:
+        return "—"
+    if value < 1:
+        return "< 1 дн."
+    return f"{value:.1f} дн.".replace(".", ",")
+
+
+def _safe_today() -> date:
+    return date.today()
 
 
 
@@ -914,6 +1068,201 @@ def dashboard():
     }
     return render_template_string(DASHBOARD_TEMPLATE, **context)
 
+
+
+@app.get("/supply-planner")
+def supply_planner():
+    if not database_enabled():
+        return Response("DATABASE_URL не задан.", 503, {"Content-Type": "text/plain; charset=utf-8"})
+
+    today = _safe_today()
+    default_end = today - timedelta(days=1)
+    date_to = _query_date("date_to") or default_end
+    date_from = _query_date("date_from") or (date_to - timedelta(days=27))
+    if date_from > date_to:
+        date_from, date_to = date_to, date_from
+
+    lead_days = _query_int("lead_days", 10, minimum=0, maximum=180)
+    safety_days = _query_int("safety_days", 7, minimum=0, maximum=180)
+    target_days = _query_int("target_days", 30, minimum=1, maximum=365)
+    low_days = _query_int("low_days", 14, minimum=1, maximum=365)
+    query = request.args.get("q", "").strip()[:120]
+
+    sales_rows = list_product_summaries(
+        2000,
+        period_type="weekly",
+        date_from=date_from,
+        date_to=date_to,
+        query=query,
+    )
+    stock_records: dict[tuple[str, Any], dict[str, Any]] = {}
+    warning = ""
+    error = ""
+    try:
+        stock_records, warning, seller_names = asyncio.run(_load_current_stock_records())
+    except RuntimeError as exc:
+        error = str(exc)
+        seller_names = []
+    except WbApiError as exc:
+        error = str(exc)
+        seller_names = []
+    except Exception as exc:
+        logger.exception("Supply planner failed")
+        error = f"Не удалось загрузить остатки WB: {type(exc).__name__}: {exc}"
+        seller_names = []
+
+    combined: dict[tuple[str, Any], dict[str, Any]] = {}
+    # Проходим по nm-ключам и избегаем дублей.
+    seen_nm: set[int] = set()
+    for key, rec in stock_records.items():
+        if key[0] != "nm":
+            continue
+        nm_id = int(rec.get("nm_id") or 0)
+        if nm_id in seen_nm:
+            continue
+        seen_nm.add(nm_id)
+        if query:
+            q = query.casefold()
+            blob = f"{rec.get('name','')} {rec.get('sku','')} {rec.get('nm_id','')}".casefold()
+            if q not in blob:
+                continue
+        combined[("nm", nm_id)] = {
+            "nm_id": nm_id,
+            "sku": rec.get("sku") or f"WB-{nm_id}",
+            "name": rec.get("name") or f"Товар WB {nm_id}",
+            "fbw": float(rec.get("fbw") or 0),
+            "fbs": float(rec.get("fbs") or 0),
+            "to_client": float(rec.get("to_client") or 0),
+            "from_client": float(rec.get("from_client") or 0),
+            "sales_units": 0.0,
+            "sales_days": 0,
+            "cogs_per_unit": 0.0,
+        }
+
+    for row in sales_rows:
+        key = _stock_key(row.nm_id, row.sku)
+        # Если есть остатки по nmID, используем именно их ключ, чтобы не плодить строки.
+        stock_rec = stock_records.get(key)
+        if stock_rec and stock_rec.get("nm_id"):
+            key = ("nm", int(stock_rec["nm_id"]))
+        item = combined.setdefault(
+            key,
+            {
+                "nm_id": int(row.nm_id) if row.nm_id else (int(stock_rec["nm_id"]) if stock_rec and stock_rec.get("nm_id") else None),
+                "sku": row.sku,
+                "name": row.name,
+                "fbw": float(stock_rec.get("fbw") or 0) if stock_rec else 0.0,
+                "fbs": float(stock_rec.get("fbs") or 0) if stock_rec else 0.0,
+                "to_client": float(stock_rec.get("to_client") or 0) if stock_rec else 0.0,
+                "from_client": float(stock_rec.get("from_client") or 0) if stock_rec else 0.0,
+                "sales_units": 0.0,
+                "sales_days": 0,
+                "cogs_per_unit": 0.0,
+            },
+        )
+        item["sales_units"] += float(row.units or 0)
+        active_days = max(1, (row.last_period - row.first_period).days + 1)
+        item["sales_days"] = max(int(item.get("sales_days") or 0), active_days)
+        if abs(float(row.units or 0)) > 0.000001:
+            item["cogs_per_unit"] = float(row.cogs or 0) / float(row.units or 1)
+        if not item.get("sku"):
+            item["sku"] = row.sku
+        if not item.get("name"):
+            item["name"] = row.name
+
+    rows: list[dict[str, Any]] = []
+    planning_days = lead_days + safety_days + target_days
+    reorder_threshold = lead_days + safety_days
+    for item in combined.values():
+        available = float(item.get("fbw") or 0) + float(item.get("fbs") or 0)
+        sales_days = int(item.get("sales_days") or max(1, (date_to - date_from).days + 1))
+        sales_units = float(item.get("sales_units") or 0)
+        daily_sales = sales_units / sales_days if sales_days > 0 else 0.0
+        days_left = available / daily_sales if daily_sales > 0.000001 else None
+        min_supply = max(0, int((daily_sales * reorder_threshold - available) + 0.999999)) if daily_sales > 0 else 0
+        recommended = max(0, int((daily_sales * planning_days - available) + 0.999999)) if daily_sales > 0 else 0
+        cogs_per_unit = float(item.get("cogs_per_unit") or 0)
+        investment = recommended * cogs_per_unit if recommended and cogs_per_unit else 0.0
+        if daily_sales <= 0.000001:
+            status = "⚪ нет продаж"
+            status_class = "muted"
+            send_by = "—"
+            rank = 4
+        elif available <= 0.000001:
+            status = "🔴 нет остатка"
+            status_class = "profit-neg"
+            send_by = today.strftime("%d.%m.%Y")
+            rank = 0
+        elif days_left is not None and days_left <= reorder_threshold:
+            status = "🔴 срочно"
+            status_class = "profit-neg"
+            send_by = today.strftime("%d.%m.%Y")
+            rank = 1
+        elif days_left is not None and days_left < low_days:
+            status = "🟠 скоро"
+            status_class = "value warn"
+            send_by = (today + timedelta(days=max(0, int(days_left - reorder_threshold)))).strftime("%d.%m.%Y")
+            rank = 2
+        else:
+            status = "🟢 норма"
+            status_class = "profit-pos"
+            send_by = (today + timedelta(days=max(0, int((days_left or 0) - reorder_threshold)))).strftime("%d.%m.%Y") if days_left else "—"
+            rank = 3
+        rows.append({
+            "rank": rank,
+            "status": status,
+            "status_class": status_class,
+            "name": item.get("name") or item.get("sku") or "—",
+            "sku": item.get("sku") or "—",
+            "nm_id": item.get("nm_id"),
+            "available": available,
+            "fbw": float(item.get("fbw") or 0),
+            "fbs": float(item.get("fbs") or 0),
+            "to_client": float(item.get("to_client") or 0),
+            "from_client": float(item.get("from_client") or 0),
+            "sales_units": sales_units,
+            "daily_sales": daily_sales,
+            "days_left": days_left,
+            "days_left_text": _fmt_days(days_left),
+            "send_by": send_by,
+            "min_supply": min_supply,
+            "recommended_supply": recommended,
+            "cogs_per_unit": cogs_per_unit,
+            "investment": investment,
+        })
+    rows.sort(key=lambda r: (r["rank"], r["days_left"] if r["days_left"] is not None else 999999, -r["daily_sales"], r["name"].casefold()))
+    totals = {
+        "products": len(rows),
+        "critical": sum(1 for r in rows if r["rank"] in {0, 1}),
+        "low": sum(1 for r in rows if r["rank"] == 2),
+        "available": sum(r["available"] for r in rows),
+        "fbw": sum(r["fbw"] for r in rows),
+        "fbs": sum(r["fbs"] for r in rows),
+        "to_client": sum(r["to_client"] for r in rows),
+        "from_client": sum(r["from_client"] for r in rows),
+        "recommended": sum(r["recommended_supply"] for r in rows),
+        "investment": sum(r["investment"] for r in rows),
+        "daily_sales": sum(r["daily_sales"] for r in rows),
+    }
+    return render_template_string(
+        SUPPLY_TEMPLATE,
+        rows=rows,
+        totals=totals,
+        error=error,
+        warning=warning,
+        as_of=today.strftime("%d.%m.%Y"),
+        date_from_value=date_from.isoformat(),
+        date_to_value=date_to.isoformat(),
+        lead_days=lead_days,
+        safety_days=safety_days,
+        target_days=target_days,
+        low_days=low_days,
+        query=query,
+        money=_money,
+        percent=_percent,
+        units=_units,
+        number=_number_input,
+    )
 
 
 @app.get("/products")
