@@ -57,7 +57,7 @@ table{width:100%;border-collapse:collapse;min-width:1050px}th,td{padding:11px 10
 DASHBOARD_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>{{ title }}</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>{{ title }}</h1><div class="subtitle">Финансы Wildberries · история себестоимости · внешний P&amp;L</div></div><div class="badge">Последнее сохранение: {{ latest_created }}</div></header>
-<nav class="nav"><a class="active" href="/">Дашборд</a><a href="/products">Товары</a><a href="/unit-economics">Юнит-экономика</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a class="active" href="/">Дашборд</a><a href="/products">Товары</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><select name="period_type" aria-label="Тип периода"><option value="" {% if not selected_type %}selected{% endif %}>Все сохранённые периоды</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Загруженные Excel</option></select><button type="submit">Показать</button></form>
 {% if latest %}<div class="grid">
 <div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(latest.revenue) }}</div></div><div class="card"><div class="label">Расчётная выплата</div><div class="value">{{ money(latest.payout) }}</div></div><div class="card"><div class="label">Прибыль до налога</div><div class="value {{ 'good' if latest.profit_before_tax >= 0 else 'bad' }}">{{ money(latest.profit_before_tax) }}</div></div><div class="card"><div class="label">УСН 6%</div><div class="value">{{ money(latest.tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if latest.profit >= 0 else 'bad' }}">{{ money(latest.profit) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(latest.cogs) }}</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(latest.external_expenses) }}</div></div><div class="card"><div class="label">Реклама WB</div><div class="value">{{ money(latest.advertising) }}</div></div><div class="card"><div class="label">ДРР / Маржа</div><div class="value {{ margin_class(latest.margin) }}">{{ percent(latest.drr) }} / {{ percent(latest.margin) }}</div></div><div class="card"><div class="label">Продано</div><div class="value">{{ units(latest.units) }} шт.</div></div></div>
@@ -73,7 +73,7 @@ DASHBOARD_TEMPLATE = r"""
 PRODUCTS_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Товары · {{ title }}</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Аналитика по товарам</h1><div class="subtitle">Прибыль, маржа и ДРР каждого SKU за выбранные сохранённые периоды</div></div><div class="badge">Найдено товаров: {{ totals.products }}</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a class="active" href="/products">Товары</a><a href="/unit-economics">Юнит-экономика</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a class="active" href="/products">Товары</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><label>Периоды<select name="period_type"><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select></label><label>С даты<input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату<input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск<input name="q" value="{{ query }}" placeholder="Название, артикул или nmID"></label><button type="submit">Показать</button>{% if query or date_from_value or date_to_value %}<a class="button secondary" href="/products?period_type={{ selected_type }}">Сбросить</a>{% endif %}</form>
 <div class="hint">Чтобы суммы не задваивались, здесь одновременно используется только один тип периодов. По умолчанию выбраны закрытые недельные отчёты.</div>
 {% if rows %}<div class="grid section"><div class="card"><div class="label">Товаров</div><div class="value">{{ totals.products }}</div></div><div class="card"><div class="label">Продано</div><div class="value">{{ units(totals.units) }} шт.</div></div><div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(totals.revenue) }}</div></div><div class="card"><div class="label">Прибыль до налога</div><div class="value {{ 'good' if totals.profit_before_tax >= 0 else 'bad' }}">{{ money(totals.profit_before_tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if totals.profit >= 0 else 'bad' }}">{{ money(totals.profit) }}</div></div><div class="card"><div class="label">Маржа</div><div class="value {{ margin_class(totals.margin) }}">{{ percent(totals.margin) }}</div></div><div class="card"><div class="label">Реклама WB</div><div class="value">{{ money(totals.advertising) }}</div></div><div class="card"><div class="label">ДРР</div><div class="value">{{ percent(totals.drr) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(totals.cogs) }}</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(totals.external_expenses) }}</div></div></div>
@@ -99,7 +99,7 @@ PRODUCT_DETAIL_TEMPLATE = r"""
 UNIT_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Юнит-экономика · {{ title }}</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Юнит-экономика</h1><div class="subtitle">Цена, выплата WB, расходы, налог, реклама, маржа и точка безубыточности по каждому SKU</div></div><div class="badge">Товаров: {{ totals.products }}</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a class="active" href="/unit-economics">Юнит-экономика</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a class="active" href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><label>Периоды<select name="period_type"><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select></label><label>С даты<input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату<input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск<input name="q" value="{{ query }}" placeholder="Название, артикул или nmID"></label><label>Целевая маржа, %<input inputmode="decimal" name="target_margin" value="{{ target_margin_input }}"></label><label>Сценарий ДРР, %<input inputmode="decimal" name="scenario_drr" value="{{ scenario_drr_input }}"></label><button type="submit">Пересчитать</button></form>
 <div class="hint">Расчёт основан на сохранённых отчётах PostgreSQL. Для корректности используй один тип периодов, лучше <b>недельные</b>, чтобы не смешивать дневные и недельные отчёты. Точка безубыточности считается приблизительно: предполагается, что доля выплаты WB от цены остаётся такой же, как в выбранном периоде.</div>
 {% if rows %}<div class="grid section"><div class="card"><div class="label">Продано</div><div class="value">{{ units(totals.units) }} шт.</div></div><div class="card"><div class="label">Средняя цена</div><div class="value">{{ money(totals.avg_price) }}</div></div><div class="card"><div class="label">Прибыль / шт.</div><div class="value {{ 'good' if totals.profit_per_unit >= 0 else 'bad' }}">{{ money(totals.profit_per_unit) }}</div></div><div class="card"><div class="label">Маржа</div><div class="value {{ margin_class(totals.margin) }}">{{ percent(totals.margin) }}</div></div><div class="card"><div class="label">ДРР</div><div class="value">{{ percent(totals.drr) }}</div></div><div class="card"><div class="label">Макс ДРР до нуля</div><div class="value {{ 'bad' if totals.max_drr_zero < totals.drr else 'good' }}">{{ percent(totals.max_drr_zero) }}</div></div><div class="card"><div class="label">Макс ДРР для цели</div><div class="value {{ 'bad' if totals.max_drr_target < totals.drr else 'good' }}">{{ percent(totals.max_drr_target) }}</div></div><div class="card"><div class="label">Сценарий прибыль</div><div class="value {{ 'good' if totals.scenario_profit >= 0 else 'bad' }}">{{ money(totals.scenario_profit) }}</div></div><div class="card"><div class="label">Сценарий маржа</div><div class="value {{ margin_class(totals.scenario_margin) }}">{{ percent(totals.scenario_margin) }}</div></div><div class="card"><div class="label">Товаров в минус</div><div class="value {{ 'bad' if totals.loss_products else 'good' }}">{{ totals.loss_products }}</div></div></div>
@@ -107,6 +107,78 @@ UNIT_TEMPLATE = r"""
 <div class="section card"><h2>Как читать показатели</h2><div class="hint"><b>Услуги WB / шт.</b> = доход покупателей минус расчётная выплата WB. Сюда попадает комиссия, логистика, удержания и прочие услуги из финансового отчёта. <b>Макс ДРР 0</b> — рекламный расход, при котором товар выходит примерно в ноль после УСН. <b>Макс ДРР цель</b> — максимальный ДРР, чтобы сохранить выбранную целевую маржу. <b>Цена для цели</b> — ориентировочная цена продажи при текущих расходах и выбранной марже.</div></div>
 {% else %}<div class="card empty section">Нет данных для расчёта. Сначала сохрани недельные отчёты через /week или /backfill.</div>{% endif %}
 <footer>WB Profit Dashboard · юнит-экономика рассчитывается по сохранённым отчётам</footer></div></body></html>
+"""
+
+
+UNIT_CALCULATOR_TEMPLATE = r"""
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Калькулятор юнитки · {{ title }}</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
+<header><div><h1>Калькулятор юнит-экономики</h1><div class="subtitle">Плановый расчёт товара: цена, СПП, выкуп, комиссия, логистика, реклама, налоги и чистая прибыль</div></div><div class="badge">Ручной сценарий · v18</div></header>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/unit-economics">Юнит-экономика</a><a class="active" href="/unit-calculator">Калькулятор юнитки</a><a href="/admin">Себестоимость и расходы</a></nav>
+<div class="hint" style="margin:0 0 16px">Это плановый калькулятор. В v18 тарифы вводятся вручную, чтобы быстро проверять гипотезы по цене, ДРР, логистике и поставке. Следующим этапом можно подключить автоподтягивание тарифов WB по API.</div>
+<form method="get" class="section">
+<div class="card"><div class="section-head"><div><h2>1. Основные расходы</h2><div class="subtitle">Товар, цена, СПП, выкуп, комиссия и закупка</div></div></div>
+<div class="form-grid">
+<div class="field"><label>Товар / артикул</label><select name="sku"><option value="">Новый товар / вручную</option>{% for p in products %}<option value="{{ p.sku }}" {% if values.sku == p.sku %}selected{% endif %}>{{ p.name or p.sku }} · {{ p.sku }}</option>{% endfor %}</select></div>
+<div class="field"><label>Название товара</label><input name="product_name" value="{{ values.product_name }}" placeholder="Например, креатин 300 г"></div>
+<div class="field"><label>Схема продажи</label><select name="scheme"><option value="fbs" {% if values.scheme == 'fbs' %}selected{% endif %}>FBS</option><option value="fbw" {% if values.scheme == 'fbw' %}selected{% endif %}>FBW</option></select></div>
+<div class="field"><label>Цена товара с СПП, ₽</label><input inputmode="decimal" name="price_spp" value="{{ number_input(values.price_spp) }}"></div>
+<div class="field"><label>СПП, %</label><input inputmode="decimal" name="spp_pct" value="{{ percent_input(values.spp_pct) }}"></div>
+<div class="field"><label>Процент выкупа, %</label><input inputmode="decimal" name="buyout_pct" value="{{ percent_input(values.buyout_pct) }}"></div>
+<div class="field"><label>Комиссия WB, %</label><input inputmode="decimal" name="commission_pct" value="{{ percent_input(values.commission_pct) }}"></div>
+<div class="field"><label>Закуп / количество, шт.</label><input inputmode="decimal" name="purchase_qty" value="{{ number_input(values.purchase_qty) }}"></div>
+<div class="field"><label>Цена закупа 1 товара, ₽</label><input inputmode="decimal" name="purchase_price" value="{{ number_input(values.purchase_price) }}"></div>
+</div></div>
+
+<div class="card section"><div class="section-head"><div><h2>2. Логистика</h2><div class="subtitle">Габариты, упаковка, склад, локализация, приёмка и хранение</div></div></div>
+<div class="form-grid">
+<div class="field"><label>Тип упаковки</label><select name="package_type"><option value="box" {% if values.package_type == 'box' %}selected{% endif %}>Короб</option><option value="mono" {% if values.package_type == 'mono' %}selected{% endif %}>Монопаллета</option></select></div>
+<div class="field"><label>Склад</label><input name="warehouse" value="{{ values.warehouse }}" placeholder="Например, Коледино / Электросталь"></div>
+<div class="field"><label>Индекс локализации, %</label><input inputmode="decimal" name="localization_pct" value="{{ percent_input(values.localization_pct) }}"></div>
+<div class="field"><label>ИРП / коэффициент</label><input inputmode="decimal" name="irp" value="{{ number_input(values.irp) }}"></div>
+<div class="field"><label>Длина, см</label><input inputmode="decimal" name="length_cm" value="{{ number_input(values.length_cm) }}"></div>
+<div class="field"><label>Ширина, см</label><input inputmode="decimal" name="width_cm" value="{{ number_input(values.width_cm) }}"></div>
+<div class="field"><label>Высота, см</label><input inputmode="decimal" name="height_cm" value="{{ number_input(values.height_cm) }}"></div>
+<div class="field"><label>Базовая логистика WB, ₽</label><input inputmode="decimal" name="base_logistics" value="{{ number_input(values.base_logistics) }}"></div>
+<div class="field"><label>Доплата за литр, ₽</label><input inputmode="decimal" name="extra_liter_cost" value="{{ number_input(values.extra_liter_cost) }}"></div>
+<div class="field"><label>Обратная логистика, ₽</label><input inputmode="decimal" name="return_logistics" value="{{ number_input(values.return_logistics) }}"></div>
+<div class="field"><label>Оборочиваемость, дн.</label><input inputmode="decimal" name="turnover_days" value="{{ number_input(values.turnover_days) }}"></div>
+<div class="field"><label>Хранение, ₽/день</label><input inputmode="decimal" name="storage_per_day" value="{{ number_input(values.storage_per_day) }}"></div>
+<div class="field"><label>Приёмка, ₽</label><input inputmode="decimal" name="acceptance" value="{{ number_input(values.acceptance) }}"></div>
+</div></div>
+
+<div class="card section"><div class="section-head"><div><h2>3. Другие расходы</h2><div class="subtitle">Налоги, реклама, упаковка, доставка до МП, эквайринг, брак и прочие расходы</div></div></div>
+<div class="form-grid">
+<div class="field"><label>НДС, %</label><input inputmode="decimal" name="vat_pct" value="{{ percent_input(values.vat_pct) }}"></div>
+<div class="field"><label>Налоговая ставка, %</label><input inputmode="decimal" name="tax_pct" value="{{ percent_input(values.tax_pct) }}"></div>
+<div class="field"><label>Логистика до МП / шт., ₽</label><input inputmode="decimal" name="mp_delivery" value="{{ number_input(values.mp_delivery) }}"></div>
+<div class="field"><label>Упаковка / шт., ₽</label><input inputmode="decimal" name="packaging_cost" value="{{ number_input(values.packaging_cost) }}"></div>
+<div class="field"><label>ДРР, %</label><input inputmode="decimal" name="drr_pct" value="{{ percent_input(values.drr_pct) }}"></div>
+<div class="field"><label>Доп. тарифные опции WB, ₽</label><input inputmode="decimal" name="tariff_options" value="{{ number_input(values.tariff_options) }}"></div>
+<div class="field"><label>Эквайринг, %</label><input inputmode="decimal" name="acquiring_pct" value="{{ percent_input(values.acquiring_pct) }}"></div>
+<div class="field"><label>Прочие расходы / шт., ₽</label><input inputmode="decimal" name="other_cost" value="{{ number_input(values.other_cost) }}"></div>
+<div class="field"><label>Брак, % от закупа</label><input inputmode="decimal" name="defect_pct" value="{{ percent_input(values.defect_pct) }}"></div>
+<div class="field"><label>Целевая маржа, %</label><input inputmode="decimal" name="target_margin" value="{{ percent_input(values.target_margin) }}"></div>
+</div><div class="form-actions"><button type="submit">Рассчитать юнитку</button><a class="button secondary" href="/unit-calculator">Сбросить</a></div></div>
+</form>
+
+{% if calculated %}
+<div class="grid section">
+<div class="card"><div class="label">Чистая прибыль / шт.</div><div class="value {{ 'good' if calc.net_profit >= 0 else 'bad' }}">{{ money(calc.net_profit) }}</div></div>
+<div class="card"><div class="label">Прибыль до налогов / шт.</div><div class="value {{ 'good' if calc.profit_before_tax >= 0 else 'bad' }}">{{ money(calc.profit_before_tax) }}</div></div>
+<div class="card"><div class="label">Маржа ROS</div><div class="value {{ margin_class(calc.margin) }}">{{ percent(calc.margin) }}</div></div>
+<div class="card"><div class="label">ROI партии</div><div class="value {{ 'good' if calc.roi >= 0 else 'bad' }}">{{ percent(calc.roi) }}</div></div>
+<div class="card"><div class="label">ROM</div><div class="value {{ 'good' if calc.rom >= 0 else 'bad' }}">{{ percent(calc.rom) }}</div></div>
+<div class="card"><div class="label">Макс ДРР до нуля</div><div class="value {{ 'good' if calc.max_drr_zero >= values.drr_pct else 'bad' }}">{{ percent(calc.max_drr_zero) }}</div></div>
+<div class="card"><div class="label">Цена безубыточности</div><div class="value">{{ money(calc.break_even_price) if calc.break_even_price is not none else '—' }}</div></div>
+<div class="card"><div class="label">Цена для целевой маржи</div><div class="value">{{ money(calc.target_price) if calc.target_price is not none else '—' }}</div></div>
+<div class="card"><div class="label">Объём, л</div><div class="value">{{ number(calc.volume_liters) }} л</div></div>
+<div class="card"><div class="label">Статус</div><div class="value {{ 'good' if calc.net_profit >= 0 else 'bad' }}">{{ calc.status }}</div></div>
+</div>
+
+<div class="section two-col"><div class="card"><div class="section-head"><div><h2>Расчёт по строкам</h2><div class="subtitle">Как на калькуляторе: партия, юнитка и доля в выручке</div></div></div><div class="table-wrap"><table style="min-width:960px"><thead><tr><th>Показатель</th><th>Партия</th><th>Unit-экономика</th><th>Доля в выручке</th></tr></thead><tbody>{% for row in breakdown %}<tr><td>{{ row.label }}</td><td class="{{ row.cls }}">{{ row.batch }}</td><td class="{{ row.cls }}">{{ row.unit }}</td><td>{{ row.share }}</td></tr>{% endfor %}</tbody></table></div></div>
+<div class="card"><h2>Пояснение</h2><div class="hint"><b>Выкуп</b> влияет на логистику: логистика к покупателю делится на процент выкупа, а обратная логистика добавляется на невыкупленные заказы. <b>Прибыль до налогов</b> считается до НДС и налоговой ставки. <b>Чистая прибыль</b> уже после налогов. Расчёт тарифов WB пока ручной: базовая логистика, доплата за литр, хранение и приёмка вводятся в форме.</div><div class="summary" style="margin-top:14px"><span>Схема: {{ values.scheme|upper }}</span><span>Упаковка: {{ 'Монопаллета' if values.package_type == 'mono' else 'Короб' }}</span><span>Склад: {{ values.warehouse or 'не указан' }}</span><span>Список цена без СПП: {{ money(calc.price_before_spp) if calc.price_before_spp else '—' }}</span></div></div></div>
+{% endif %}
+<footer>WB Profit Dashboard · плановая юнит-экономика</footer></div></body></html>
 """
 
 
@@ -271,6 +343,30 @@ def _query_percent(name: str, default: float) -> float:
     return max(-1.0, min(value, 3.0))
 
 
+
+def _query_float(name: str, default: float = 0) -> float:
+    raw = request.args.get(name, "").strip().replace("\u00a0", "").replace(" ", "").replace(",", ".")
+    if raw == "":
+        return float(default)
+    try:
+        return float(raw)
+    except ValueError:
+        return float(default)
+
+
+def _query_rate(name: str, default: float = 0, *, min_value: float = -1, max_value: float = 10) -> float:
+    value = _query_float(name, default * 100 if abs(default) <= 1 else default)
+    if abs(value) > 1:
+        value = value / 100
+    return max(min_value, min(float(value), max_value))
+
+
+def _safe_rate(value: float, default: float = 0) -> float:
+    value = float(value if value is not None else default)
+    if value > 1:
+        value = value / 100
+    return max(-1.0, min(value, 10.0))
+
 def _input_percent(value: float) -> str:
     number = float(value) * 100
     return str(int(number)) if number.is_integer() else f"{number:.1f}".replace(".", ",")
@@ -344,6 +440,172 @@ def _unit_economy_row(row, *, target_margin: float, scenario_drr: float) -> dict
         "status": status,
         "status_level": status_level,
     }
+
+
+class DotDict(dict):
+    __getattr__ = dict.get
+
+
+def _unit_calculator_values(product_summary=None) -> DotDict:
+    units = float(getattr(product_summary, "units", 0) or 0)
+    revenue = float(getattr(product_summary, "revenue", 0) or 0)
+    payout = float(getattr(product_summary, "payout", 0) or 0)
+    cogs = float(getattr(product_summary, "cogs", 0) or 0)
+    drr = float(getattr(product_summary, "drr", 0) or 0)
+    avg_price = _div(revenue, units)
+    approx_commission = max(0.0, _div(revenue - payout, revenue)) if revenue else 0.0
+    selected_sku = request.args.get("sku", "").strip()
+    selected_name = request.args.get("product_name", "").strip()
+    if not selected_name and product_summary is not None:
+        selected_name = getattr(product_summary, "name", "") or getattr(product_summary, "sku", "")
+    return DotDict({
+        "sku": selected_sku,
+        "product_name": selected_name,
+        "scheme": request.args.get("scheme", "fbs").strip().lower() if request.args.get("scheme", "fbs").strip().lower() in {"fbs", "fbw"} else "fbs",
+        "price_spp": _query_float("price_spp", avg_price),
+        "spp_pct": _query_rate("spp_pct", 0),
+        "buyout_pct": _query_rate("buyout_pct", 1, min_value=0.0001, max_value=1),
+        "commission_pct": _query_rate("commission_pct", approx_commission),
+        "purchase_qty": max(0.0, _query_float("purchase_qty", 1)),
+        "purchase_price": _query_float("purchase_price", _div(cogs, units)),
+        "package_type": request.args.get("package_type", "box").strip().lower() if request.args.get("package_type", "box").strip().lower() in {"box", "mono"} else "box",
+        "warehouse": request.args.get("warehouse", "").strip()[:100],
+        "localization_pct": _query_rate("localization_pct", 1, min_value=0, max_value=10),
+        "irp": max(0.0, _query_float("irp", 1)),
+        "length_cm": max(0.0, _query_float("length_cm", 0)),
+        "width_cm": max(0.0, _query_float("width_cm", 0)),
+        "height_cm": max(0.0, _query_float("height_cm", 0)),
+        "base_logistics": max(0.0, _query_float("base_logistics", 0)),
+        "extra_liter_cost": max(0.0, _query_float("extra_liter_cost", 0)),
+        "return_logistics": max(0.0, _query_float("return_logistics", 0)),
+        "turnover_days": max(0.0, _query_float("turnover_days", 0)),
+        "storage_per_day": max(0.0, _query_float("storage_per_day", 0)),
+        "acceptance": max(0.0, _query_float("acceptance", 0)),
+        "vat_pct": _query_rate("vat_pct", 0, min_value=0, max_value=1),
+        "tax_pct": _query_rate("tax_pct", 0.06, min_value=0, max_value=1),
+        "mp_delivery": max(0.0, _query_float("mp_delivery", 0)),
+        "packaging_cost": max(0.0, _query_float("packaging_cost", 0)),
+        "drr_pct": _query_rate("drr_pct", drr, min_value=0, max_value=1),
+        "tariff_options": max(0.0, _query_float("tariff_options", 0)),
+        "acquiring_pct": _query_rate("acquiring_pct", 0, min_value=0, max_value=1),
+        "other_cost": max(0.0, _query_float("other_cost", 0)),
+        "defect_pct": _query_rate("defect_pct", 0, min_value=0, max_value=1),
+        "target_margin": _query_rate("target_margin", 0.15, min_value=0, max_value=1),
+    })
+
+
+def _calculate_unit_plan(values: DotDict) -> tuple[DotDict, list[dict[str, str]]]:
+    price = max(0.0, float(values.price_spp or 0))
+    buyout = max(0.0001, min(1.0, float(values.buyout_pct or 0)))
+    volume_liters = max(0.0, float(values.length_cm or 0) * float(values.width_cm or 0) * float(values.height_cm or 0) / 1000.0)
+    base_logistics = float(values.base_logistics or 0) + max(0.0, volume_liters - 1.0) * float(values.extra_liter_cost or 0)
+    outbound_logistics = base_logistics * float(values.localization_pct or 0) * float(values.irp or 0)
+    logistics_per_buyout = outbound_logistics / buyout + float(values.return_logistics or 0) * (1.0 - buyout) / buyout
+    storage = float(values.turnover_days or 0) * float(values.storage_per_day or 0)
+    purchase = float(values.purchase_price or 0)
+    commission = price * float(values.commission_pct or 0)
+    advertising = price * float(values.drr_pct or 0)
+    acquiring = price * float(values.acquiring_pct or 0)
+    vat_effective_rate = (float(values.vat_pct or 0) / (1.0 + float(values.vat_pct or 0))) if float(values.vat_pct or 0) > 0 else 0.0
+    vat = price * vat_effective_rate
+    tax = price * float(values.tax_pct or 0)
+    defect = purchase * float(values.defect_pct or 0)
+    wb_expenses = commission + logistics_per_buyout + storage + float(values.acceptance or 0) + float(values.tariff_options or 0) + acquiring
+    direct_costs = purchase + float(values.mp_delivery or 0) + float(values.packaging_cost or 0) + float(values.other_cost or 0) + defect
+    profit_before_ads_and_tax = price - wb_expenses - direct_costs
+    profit_before_tax = profit_before_ads_and_tax - advertising
+    net_profit = profit_before_tax - tax - vat
+    total_costs = price - net_profit
+    margin = _div(net_profit, price)
+    roi_base = max(0.0001, purchase + float(values.mp_delivery or 0) + float(values.packaging_cost or 0))
+    roi = _div(net_profit, roi_base)
+    rom = _div(net_profit, total_costs)
+    sold_units = float(values.purchase_qty or 0) * buyout
+    batch_revenue = price * sold_units
+    batch_net_profit = net_profit * sold_units
+    investment = roi_base * float(values.purchase_qty or 0)
+    price_before_spp = price / (1.0 - float(values.spp_pct or 0)) if float(values.spp_pct or 0) < 0.999999 else 0.0
+    fixed_costs = logistics_per_buyout + storage + float(values.acceptance or 0) + purchase + float(values.mp_delivery or 0) + float(values.packaging_cost or 0) + float(values.tariff_options or 0) + float(values.other_cost or 0) + defect
+    percent_costs_no_drr = float(values.commission_pct or 0) + float(values.acquiring_pct or 0) + float(values.tax_pct or 0) + vat_effective_rate
+    max_drr_zero = 1.0 - percent_costs_no_drr - _div(fixed_costs, price)
+    max_drr_target = max_drr_zero - float(values.target_margin or 0)
+    denom_zero = 1.0 - percent_costs_no_drr - float(values.drr_pct or 0)
+    break_even_price = fixed_costs / denom_zero if denom_zero > 0.000001 else None
+    denom_target = denom_zero - float(values.target_margin or 0)
+    target_price = fixed_costs / denom_target if denom_target > 0.000001 else None
+    calc = DotDict({
+        "price": price,
+        "price_before_spp": price_before_spp,
+        "volume_liters": volume_liters,
+        "outbound_logistics": outbound_logistics,
+        "logistics_per_buyout": logistics_per_buyout,
+        "storage": storage,
+        "commission": commission,
+        "advertising": advertising,
+        "acquiring": acquiring,
+        "vat": vat,
+        "tax": tax,
+        "defect": defect,
+        "wb_expenses": wb_expenses,
+        "direct_costs": direct_costs,
+        "profit_before_ads_and_tax": profit_before_ads_and_tax,
+        "profit_before_tax": profit_before_tax,
+        "net_profit": net_profit,
+        "total_costs": total_costs,
+        "margin": margin,
+        "roi": _div(batch_net_profit, investment) if investment else roi,
+        "rom": rom,
+        "max_drr_zero": max_drr_zero,
+        "max_drr_target": max_drr_target,
+        "break_even_price": break_even_price,
+        "target_price": target_price,
+        "sold_units": sold_units,
+        "batch_revenue": batch_revenue,
+        "batch_net_profit": batch_net_profit,
+        "investment": investment,
+        "status": "Выгодно" if net_profit >= 0 else "В минусе",
+    })
+    def row(label: str, unit_value: float, *, negative: bool = True, units_label: str = "money") -> dict[str, str]:
+        cls = "profit-neg" if negative and unit_value > 0 else "profit-pos" if (not negative and unit_value >= 0) else ""
+        batch_value = unit_value * sold_units
+        if units_label == "qty":
+            unit_text = _units(unit_value)
+            batch_text = _units(batch_value)
+            share = "—"
+        elif units_label == "percent":
+            unit_text = _percent(unit_value)
+            batch_text = "—"
+            share = "—"
+        else:
+            unit_text = _money(unit_value if not negative else -unit_value)
+            batch_text = _money(batch_value if not negative else -batch_value)
+            share = _percent(_div(unit_value, price)) if price else "—"
+        return {"label": label, "unit": unit_text, "batch": batch_text, "share": share, "cls": cls}
+    breakdown = [
+        row("Объём продаж, шт.", 1, negative=False, units_label="qty"),
+        row("Выручка в ценах реализации", price, negative=False),
+        row("Расходы всего", total_costs),
+        row("Вложения в товар", purchase),
+        row("Комиссия WB", commission),
+        row("Логистика WB с учётом выкупа", logistics_per_buyout),
+        row("Хранение", storage),
+        row("Приёмка", float(values.acceptance or 0)),
+        row("Реклама", advertising),
+        row("Эквайринг", acquiring),
+        row("Логистика до МП", float(values.mp_delivery or 0)),
+        row("Упаковка", float(values.packaging_cost or 0)),
+        row("Доп. тарифные опции WB", float(values.tariff_options or 0)),
+        row("Прочие расходы", float(values.other_cost or 0)),
+        row("Брак", defect),
+        row("Прибыль до налогов", profit_before_tax, negative=False),
+        row("НДС", vat),
+        row("Налог", tax),
+        row("Чистая прибыль", net_profit, negative=False),
+        {"label": "ROI", "unit": _percent(calc.roi), "batch": "—", "share": "—", "cls": "profit-pos" if calc.roi >= 0 else "profit-neg"},
+        {"label": "ROM", "unit": _percent(calc.rom), "batch": "—", "share": "—", "cls": "profit-pos" if calc.rom >= 0 else "profit-neg"},
+        {"label": "ROS", "unit": _percent(calc.margin), "batch": "—", "share": "—", "cls": "profit-pos" if calc.margin >= 0 else "profit-neg"},
+    ]
+    return calc, breakdown
 
 
 @app.get("/")
@@ -501,6 +763,38 @@ def unit_economics():
         money=_money,
         percent=_percent,
         units=_units,
+        margin_class=_margin_class,
+    )
+
+
+@app.get("/unit-calculator")
+def unit_calculator():
+    if not database_enabled():
+        return Response("DATABASE_URL не задан.", 503, {"Content-Type": "text/plain; charset=utf-8"})
+    products = list_product_summaries(1000, period_type="weekly")
+    products = sorted(products, key=lambda r: ((r.name or r.sku or "").casefold(), r.sku or ""))
+    selected_sku = request.args.get("sku", "").strip()
+    product_summary = None
+    if selected_sku:
+        key = selected_sku.casefold()
+        product_summary = next((p for p in products if (p.sku or "").casefold() == key), None)
+    values = _unit_calculator_values(product_summary)
+    calculated = bool(request.args)
+    calc, breakdown = _calculate_unit_plan(values) if calculated else (DotDict(), [])
+    return render_template_string(
+        UNIT_CALCULATOR_TEMPLATE,
+        title=os.getenv("DASHBOARD_TITLE", "WB Profit Dashboard").strip() or "WB Profit Dashboard",
+        products=products,
+        values=values,
+        calculated=calculated,
+        calc=calc,
+        breakdown=breakdown,
+        money=_money,
+        percent=_percent,
+        units=_units,
+        number=_number_input,
+        number_input=_number_input,
+        percent_input=_input_percent,
         margin_class=_margin_class,
     )
 
