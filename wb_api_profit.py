@@ -36,6 +36,27 @@ def _as_nm_id(value: Any) -> int | None:
         return None
 
 
+
+
+def _amount_any(row: dict[str, Any], *keys: str) -> float:
+    """Возвращает первое найденное числовое значение по списку возможных ключей WB API."""
+    for key in keys:
+        if key in row and row.get(key) not in (None, ""):
+            return as_number(row.get(key))
+    return 0.0
+
+
+def _row_wb_costs(row: dict[str, Any]) -> dict[str, float]:
+    """Читает расходы WB из детализации. WB иногда меняет/добавляет поля, поэтому держим алиасы."""
+    return {
+        "logistics": _amount_any(row, "deliveryService", "delivery_service", "deliveryServiceSum", "deliveryRub", "delivery_rub"),
+        "transport": _amount_any(row, "rebillLogisticCost", "rebill_logistic_cost", "rebillLogisticCostSum"),
+        "handling": _amount_any(row, "paidAcceptance", "paid_acceptance", "paidAcceptanceSum", "acceptance", "acceptanceFee"),
+        "storage": _amount_any(row, "paidStorage", "paid_storage", "paidStorageSum", "storageFee"),
+        "other_withholdings": _amount_any(row, "deduction", "deductionSum", "deductions"),
+        "fines": _amount_any(row, "penalty", "penaltySum", "fine", "fines"),
+    }
+
 def _transaction_date(row: dict[str, Any], fallback: date | None = None) -> date | None:
     for key in ("saleDt", "orderDt", "rrdDt", "dateFrom", "dateTo"):
         parsed = as_date(_value(row, key))
@@ -98,6 +119,102 @@ def _allocate_item_overheads_to_operations(result: ReportResult) -> None:
             share = weight / weight_total if weight_total else 0.0
             op.advertising = item.advertising * share
             op.general_external_expenses = item.general_external_expenses * share
+
+
+
+def _distribute_wb_costs_to_operations(result: ReportResult) -> None:
+    """
+    Раскладывает агрегированные удержания WB по операциям продаж/возвратов.
+
+    В финансовой детализации WB часть сервисных строк (логистика, хранение, приёмка,
+    штрафы и удержания) может приходить отдельно от строки продажи. Поэтому на уровне SKU
+    суммы уже есть, а в строках продаж они могут быть нулевыми. Для истории продаж
+    распределяем итоговые расходы SKU пропорционально выручке операций.
+    """
+    if not result.operations:
+        return
+
+    service_attrs = (
+        "logistics",
+        "transport",
+        "handling",
+        "storage",
+        "other_withholdings",
+        "fines",
+    )
+    items_by_sku = {normalize_sku(item.sku): item for item in result.items if item.sku}
+    items_by_nm = {int(item.nm_id): item for item in result.items if item.nm_id is not None}
+
+    ops_by_sku: dict[str, list[SaleOperation]] = {}
+    for op in result.operations:
+        key = normalize_sku(op.sku)
+        ops_by_sku.setdefault(key, []).append(op)
+
+    attached_keys: set[str] = set()
+    for key, ops in ops_by_sku.items():
+        item = items_by_sku.get(key)
+        if item is None and ops and ops[0].nm_id is not None:
+            item = items_by_nm.get(int(ops[0].nm_id))
+        if item is None:
+            continue
+        attached_keys.add(normalize_sku(item.sku))
+
+        weight_total = sum(abs(op.revenue) for op in ops)
+        if weight_total <= 1e-9:
+            weight_total = sum(abs(op.quantity) for op in ops)
+        if weight_total <= 1e-9:
+            weight_total = float(len(ops))
+
+        for attr in service_attrs:
+            total_value = float(getattr(item, attr, 0.0) or 0.0)
+            # Перезаписываем, а не прибавляем: строка продажи могла содержать часть расходов,
+            # но итоговая сумма SKU — источник правды для отчёта.
+            allocated = 0.0
+            for op in ops[:-1]:
+                weight = abs(op.revenue) or abs(op.quantity) or 1.0
+                share_value = total_value * weight / weight_total if weight_total else 0.0
+                setattr(op, attr, share_value)
+                allocated += share_value
+            if ops:
+                setattr(ops[-1], attr, total_value - allocated)
+
+    # Если по SKU есть сервисные расходы, но нет строки продажи/возврата,
+    # сохраняем отдельную операцию, чтобы они не пропадали из "Истории продаж".
+    for item in result.items:
+        key = normalize_sku(item.sku)
+        if key in attached_keys:
+            continue
+        if not any(abs(float(getattr(item, attr, 0.0) or 0.0)) > 1e-9 for attr in service_attrs):
+            continue
+        op_date = result.period_end or result.period_start
+        result.operations.append(
+            SaleOperation(
+                operation_id=_operation_id(
+                    {
+                        "rrdId": f"wb-expense:{item.sku}:{result.period_start}:{result.period_end}",
+                        "retailAmount": 0,
+                        "quantity": 0,
+                    },
+                    sku_key=key,
+                    operation_type="Расход WB",
+                    transaction_date=op_date,
+                ),
+                operation_date=op_date,
+                operation_type="Расход WB",
+                sku=item.sku,
+                name=item.name,
+                nm_id=item.nm_id,
+                quantity=0.0,
+                revenue=0.0,
+                payout_for_goods=0.0,
+                logistics=item.logistics,
+                transport=item.transport,
+                handling=item.handling,
+                storage=item.storage,
+                other_withholdings=item.other_withholdings,
+                fines=item.fines,
+            )
+        )
 
 def analyze_api_report(
     rows: Iterable[dict[str, Any]],
@@ -219,12 +336,13 @@ def analyze_api_report(
                 item.cogs_amount += qty * profile.unit_cost
                 item.unit_external_expenses += qty * profile.unit_external_expense
 
-            logistics = as_number(_value(row, "deliveryService"))
-            transport = as_number(_value(row, "rebillLogisticCost"))
-            handling = as_number(_value(row, "paidAcceptance"))
-            storage = as_number(_value(row, "paidStorage"))
-            other_withholdings = as_number(_value(row, "deduction"))
-            fines = as_number(_value(row, "penalty"))
+            costs = _row_wb_costs(row)
+            logistics = costs["logistics"]
+            transport = costs["transport"]
+            handling = costs["handling"]
+            storage = costs["storage"]
+            other_withholdings = costs["other_withholdings"]
+            fines = costs["fines"]
             op_type = "Возврат" if is_return else "Продажа"
             operations.append(
                 SaleOperation(
@@ -250,12 +368,13 @@ def analyze_api_report(
                 )
             )
 
-        item.logistics += as_number(_value(row, "deliveryService"))
-        item.transport += as_number(_value(row, "rebillLogisticCost"))
-        item.handling += as_number(_value(row, "paidAcceptance"))
-        item.storage += as_number(_value(row, "paidStorage"))
-        item.other_withholdings += as_number(_value(row, "deduction"))
-        item.fines += as_number(_value(row, "penalty"))
+        row_costs = _row_wb_costs(row)
+        item.logistics += row_costs["logistics"]
+        item.transport += row_costs["transport"]
+        item.handling += row_costs["handling"]
+        item.storage += row_costs["storage"]
+        item.other_withholdings += row_costs["other_withholdings"]
+        item.fines += row_costs["fines"]
 
     result = ReportResult(
         period_start=min(starts) if starts else requested_start,
@@ -265,6 +384,7 @@ def analyze_api_report(
         missing_cost_skus=sorted(missing_keys),
     )
     apply_external_expenses(result, costs_path)
+    _distribute_wb_costs_to_operations(result)
     _allocate_item_overheads_to_operations(result)
     result.items.sort(key=lambda item: (item.revenue, item.profit), reverse=True)
     return result
