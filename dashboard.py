@@ -139,7 +139,7 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 <div class="field"><label>Товар / артикул</label><select name="sku"><option value="">Новый товар / вручную</option>{% for p in products %}<option value="{{ p.sku }}" {% if values.sku == p.sku %}selected{% endif %}>{{ p.name or p.sku }} · {{ p.sku }}</option>{% endfor %}</select></div>
 <div class="field"><label>Название товара</label><input name="product_name" value="{{ values.product_name }}" placeholder="Например, креатин 300 г"></div>
 <div class="field"><label>Схема продажи</label><select name="scheme"><option value="fbs" {% if values.scheme == 'fbs' %}selected{% endif %}>FBS</option><option value="fbw" {% if values.scheme == 'fbw' %}selected{% endif %}>FBW</option></select></div>
-<div class="field"><label>Цена товара с СПП, ₽</label><input inputmode="decimal" name="price_spp" value="{{ number_input(values.price_spp) }}"></div>
+<div class="field"><label>Цена для покупателя с СПП, ₽</label><input inputmode="decimal" name="price_spp" value="{{ number_input(values.price_spp) }}"><div class="hint" style="margin-top:6px">Вводи цену, которую видит покупатель после СПП. Калькулятор сам восстановит расчётную цену до СПП.</div></div>
 <div class="field"><label>СПП, %</label><input inputmode="decimal" name="spp_pct" value="{{ percent_input(values.spp_pct) }}"></div>
 <div class="field"><label>Процент выкупа, %</label><input inputmode="decimal" name="buyout_pct" value="{{ percent_input(values.buyout_pct) }}"></div>
 <div class="field"><label>Комиссия WB, %</label><input inputmode="decimal" name="commission_pct" value="{{ percent_input(values.commission_pct) }}"></div>
@@ -150,7 +150,7 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 <div class="card section"><div class="section-head"><div><h2>2. Логистика</h2><div class="subtitle">Габариты, упаковка, склад, локализация, приёмка и хранение</div></div></div>
 <div class="form-grid">
 <div class="field"><label>Тип упаковки</label><select name="package_type"><option value="box" {% if values.package_type == 'box' %}selected{% endif %}>Короб</option><option value="mono" {% if values.package_type == 'mono' %}selected{% endif %}>Монопаллета</option></select></div>
-<div class="field"><label>Склад</label><input name="warehouse" value="{{ values.warehouse }}" placeholder="Например, Коледино / Электросталь"></div>
+<div class="field"><label>Склад WB</label>{% if warehouse_options %}<select name="warehouse" id="warehouseSelect"><option value="">Выбери склад WB</option>{% if values.warehouse and values.warehouse not in warehouse_options %}<option value="{{ values.warehouse }}" selected>{{ values.warehouse }}</option>{% endif %}{% for wh in warehouse_options %}<option value="{{ wh }}" {% if values.warehouse == wh %}selected{% endif %}>{{ wh }}</option>{% endfor %}</select>{% else %}<input name="warehouse" value="{{ values.warehouse }}" placeholder="Например, Коледино / Электросталь">{% endif %}<div class="hint" style="margin-top:6px">Список складов подтягивается из тарифов WB по выбранному типу упаковки и дате. После выбора склада тарифы подтянутся автоматически.</div></div>
 <div class="field"><label>Дата тарифов WB</label><input type="date" name="tariff_date" value="{{ values.tariff_date }}"></div>
 <div class="field"><label>Индекс локализации, %</label><input inputmode="decimal" name="localization_pct" value="{{ percent_input(values.localization_pct) }}"></div>
 <div class="field"><label>ИРП / коэффициент</label><input inputmode="decimal" name="irp" value="{{ number_input(values.irp) }}"></div>
@@ -209,7 +209,7 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 </div>
 
 <div class="section two-col"><div class="card"><div class="section-head"><div><h2>Расчёт по строкам</h2><div class="subtitle">Как на калькуляторе: партия, юнитка и доля в выручке</div></div></div><div class="table-wrap"><table style="min-width:960px"><thead><tr><th>Показатель</th><th>Партия</th><th>Unit-экономика</th><th>Доля в выручке</th></tr></thead><tbody>{% for row in breakdown %}<tr><td>{{ row.label }}</td><td class="{{ row.cls }}">{{ row.batch }}</td><td class="{{ row.cls }}">{{ row.unit }}</td><td>{{ row.share }}</td></tr>{% endfor %}</tbody></table></div></div>
-<div class="card"><h2>Пояснение</h2><div class="hint"><b>Выкуп</b> влияет на логистику: логистика к покупателю делится на процент выкупа, а обратная логистика добавляется на невыкупленные заказы. <b>Прибыль до налогов</b> считается до НДС и налоговой ставки. <b>Чистая прибыль</b> уже после налогов. Базовая логистика, доплата за литр, хранение и обратная логистика могут подтягиваться из тарифов WB по складу. Приёмку и комиссию пока проверь вручную.</div><div class="summary" style="margin-top:14px"><span>Схема: {{ values.scheme|upper }}</span><span>Упаковка: {{ 'Монопаллета' if values.package_type == 'mono' else 'Короб' }}</span><span>Склад: {{ values.warehouse or 'не указан' }}</span><span>Список цена без СПП: {{ money(calc.price_before_spp) if calc.price_before_spp else '—' }}</span></div></div></div>
+<div class="card"><h2>Пояснение</h2><div class="hint"><b>Цена с СПП</b> — это цена, которую видит покупатель. Если указан СПП %, калькулятор считает <b>расчётную цену до СПП</b> и уже от неё считает комиссию, ДРР, налог и прибыль. <b>Выкуп</b> влияет только на логистику: логистика к покупателю делится на процент выкупа, а обратная логистика добавляется на невыкупленные заказы. Колонка <b>Партия</b> теперь считается по количеству закупа, поэтому при закупе 1 шт. она совпадает с unit-экономикой.</div><div class="summary" style="margin-top:14px"><span>Схема: {{ values.scheme|upper }}</span><span>Упаковка: {{ 'Монопаллета' if values.package_type == 'mono' else 'Короб' }}</span><span>Склад: {{ values.warehouse or 'не указан' }}</span><span>Цена с СПП: {{ money(calc.price_spp) if calc.price_spp else '—' }}</span><span>Расчётная цена до СПП: {{ money(calc.price_before_spp) if calc.price_before_spp else '—' }}</span></div></div></div>
 {% endif %}
 
 <script>
@@ -297,6 +297,11 @@ UNIT_CALCULATOR_TEMPLATE = r"""
     }
   });
   loadScenarios();
+  document.getElementById('warehouseSelect')?.addEventListener('change', () => {
+    const params = currentParams();
+    params.set('autoload_tariffs', '1');
+    location.href = '/unit-calculator?' + params.toString();
+  });
 })();
 </script>
 
@@ -817,7 +822,7 @@ def _wb_tariff_headers() -> dict[str, str]:
     return {
         "Authorization": token,
         "Accept": "application/json",
-        "User-Agent": "WB-Profit-Dashboard/19.0",
+        "User-Agent": "WB-Profit-Dashboard/26.0",
     }
 
 
@@ -866,6 +871,24 @@ def _find_warehouse(rows: list[dict[str, Any]], query: str) -> dict[str, Any] | 
         if q in name or name in q:
             return row
     return None
+
+
+def _load_tariff_warehouse_names(package_type: str, tariff_date: str) -> tuple[list[str], DotDict | None]:
+    """Return warehouse names from WB tariff API for selector in unit calculator."""
+    try:
+        url = TARIFF_PALLET_URL if package_type == "mono" else TARIFF_BOX_URL
+        payload = _wb_get_json(url, {"date": tariff_date})
+        names = []
+        seen = set()
+        for row in _warehouse_rows(payload):
+            name = str(row.get("warehouseName") or row.get("name") or "").strip()
+            if name and name.casefold() not in seen:
+                names.append(name)
+                seen.add(name.casefold())
+        names.sort(key=lambda x: x.casefold())
+        return names, None
+    except RuntimeError as exc:
+        return [], DotDict({"kind": "error", "text": f"Не удалось загрузить список складов WB: {exc}"})
 
 
 def _apply_wb_tariffs(values: DotDict) -> tuple[DotDict, DotDict]:
@@ -990,7 +1013,11 @@ def _unit_calculator_values(product_summary=None) -> DotDict:
 
 
 def _calculate_unit_plan(values: DotDict) -> tuple[DotDict, list[dict[str, str]]]:
-    price = max(0.0, float(values.price_spp or 0))
+    price_spp = max(0.0, float(values.price_spp or 0))
+    spp_rate = max(0.0, min(0.999999, float(values.spp_pct or 0)))
+    # Buyer-facing price after WB SPP is restored to seller's calculation price before SPP.
+    # This avoids subtracting WB commissions/taxes from an already discounted buyer price.
+    price = price_spp / (1.0 - spp_rate) if spp_rate > 0 else price_spp
     buyout = max(0.0001, min(1.0, float(values.buyout_pct or 0)))
     volume_liters = max(0.0, float(values.length_cm or 0) * float(values.width_cm or 0) * float(values.height_cm or 0) / 1000.0)
     base_logistics = float(values.base_logistics or 0) + max(0.0, volume_liters - 1.0) * float(values.extra_liter_cost or 0)
@@ -1015,11 +1042,12 @@ def _calculate_unit_plan(values: DotDict) -> tuple[DotDict, list[dict[str, str]]
     roi_base = max(0.0001, purchase + float(values.mp_delivery or 0) + float(values.packaging_cost or 0))
     roi = _div(net_profit, roi_base)
     rom = _div(net_profit, total_costs)
-    sold_units = float(values.purchase_qty or 0) * buyout
+    sold_units = float(values.purchase_qty or 0)
     batch_revenue = price * sold_units
     batch_net_profit = net_profit * sold_units
     investment = roi_base * float(values.purchase_qty or 0)
-    price_before_spp = price / (1.0 - float(values.spp_pct or 0)) if float(values.spp_pct or 0) < 0.999999 else 0.0
+    price_before_spp = price
+    spp_discount_amount = max(0.0, price_before_spp - price_spp)
     fixed_costs = logistics_per_buyout + storage + float(values.acceptance or 0) + purchase + float(values.mp_delivery or 0) + float(values.packaging_cost or 0) + float(values.tariff_options or 0) + float(values.other_cost or 0) + defect
     percent_costs_no_drr = float(values.commission_pct or 0) + float(values.acquiring_pct or 0) + float(values.tax_pct or 0) + vat_effective_rate
     max_drr_zero = 1.0 - percent_costs_no_drr - _div(fixed_costs, price)
@@ -1030,7 +1058,9 @@ def _calculate_unit_plan(values: DotDict) -> tuple[DotDict, list[dict[str, str]]
     target_price = fixed_costs / denom_target if denom_target > 0.000001 else None
     calc = DotDict({
         "price": price,
+        "price_spp": price_spp,
         "price_before_spp": price_before_spp,
+        "spp_discount_amount": spp_discount_amount,
         "volume_liters": volume_liters,
         "outbound_logistics": outbound_logistics,
         "logistics_per_buyout": logistics_per_buyout,
@@ -1078,7 +1108,9 @@ def _calculate_unit_plan(values: DotDict) -> tuple[DotDict, list[dict[str, str]]
         return {"label": label, "unit": unit_text, "batch": batch_text, "share": share, "cls": cls}
     breakdown = [
         row("Объём продаж, шт.", 1, negative=False, units_label="qty"),
-        row("Выручка в ценах реализации", price, negative=False),
+        row("Выручка в ценах реализации до СПП", price, negative=False),
+        row("Цена покупателя с СПП", price_spp, negative=False),
+        row("СПП / скидка WB", spp_discount_amount),
         row("Расходы всего", total_costs),
         row("Вложения в товар", purchase),
         row("Комиссия WB", commission),
@@ -1671,6 +1703,9 @@ def unit_calculator():
         product_summary = next((p for p in products if (p.sku or "").casefold() == key), None)
     values = _unit_calculator_values(product_summary)
     tariff_notice = None
+    warehouse_options, wh_notice = _load_tariff_warehouse_names(str(values.package_type or "box"), str(values.tariff_date or date.today().isoformat()))
+    if wh_notice and not tariff_notice:
+        tariff_notice = wh_notice
     if request.args.get("autoload_tariffs"):
         values, tariff_notice = _apply_wb_tariffs(values)
     calculated = bool(request.args)
@@ -1680,6 +1715,7 @@ def unit_calculator():
         title=os.getenv("DASHBOARD_TITLE", "WB Profit Dashboard").strip() or "WB Profit Dashboard",
         products=products,
         values=values,
+        warehouse_options=warehouse_options,
         tariff_notice=tariff_notice,
         calculated=calculated,
         calc=calc,
