@@ -150,10 +150,72 @@ class SkuResult:
 
 
 @dataclass
+class SaleOperation:
+    operation_id: str
+    operation_date: date | None
+    operation_type: str
+    sku: str
+    name: str = ""
+    nm_id: int | None = None
+    quantity: float = 0.0
+    revenue: float = 0.0
+    payout_for_goods: float = 0.0
+    logistics: float = 0.0
+    transport: float = 0.0
+    handling: float = 0.0
+    storage: float = 0.0
+    other_withholdings: float = 0.0
+    fines: float = 0.0
+    advertising: float = 0.0
+    unit_cost: float = 0.0
+    cogs: float = 0.0
+    unit_external_expenses: float = 0.0
+    general_external_expenses: float = 0.0
+    missing_cost: bool = False
+
+    @property
+    def calculated_payout(self) -> float:
+        return (
+            self.payout_for_goods
+            - self.logistics
+            - self.transport
+            - self.handling
+            - self.storage
+            - self.other_withholdings
+            - self.fines
+        )
+
+    @property
+    def external_expenses(self) -> float:
+        return self.unit_external_expenses + self.general_external_expenses
+
+    @property
+    def tax(self) -> float:
+        return self.revenue * TAX_RATE
+
+    @property
+    def profit_before_tax(self) -> float:
+        return self.calculated_payout - self.cogs - self.external_expenses - self.advertising
+
+    @property
+    def profit(self) -> float:
+        return self.profit_before_tax - self.tax
+
+    @property
+    def margin(self) -> float:
+        return self.profit / self.revenue if self.revenue else 0.0
+
+    @property
+    def drr(self) -> float:
+        return self.advertising / self.revenue if self.revenue else 0.0
+
+
+@dataclass
 class ReportResult:
     period_start: date | None
     period_end: date | None
     items: list[SkuResult]
+    operations: list[SaleOperation] = field(default_factory=list)
     missing_cost_skus: list[str] = field(default_factory=list)
     unmatched_ad_nm_ids: list[int] = field(default_factory=list)
     advertising_warning: str = ""
@@ -422,7 +484,33 @@ def _expenses_path(costs_path: str | Path) -> Path:
 
 
 def load_cost_profiles(costs_path: str | Path) -> dict[str, list[CostProfile]]:
-    """Объединяет базовый costs.xlsx с необязательной историей cost_history.xlsx."""
+    """Читает себестоимость из PostgreSQL; Excel остаётся резервным источником."""
+    try:
+        from wb_management import management_store_ready, list_cost_profiles
+
+        if management_store_ready():
+            profiles: dict[str, list[CostProfile]] = {}
+            for row in list_cost_profiles(limit=5000):
+                key = normalize_sku(row.sku)
+                profiles.setdefault(key, []).append(
+                    CostProfile(
+                        sku=row.sku,
+                        name=row.name or row.sku,
+                        effective_from=row.effective_from,
+                        unit_cost=row.unit_cost,
+                        fulfillment_per_unit=row.fulfillment_per_unit,
+                        packaging_per_unit=row.packaging_per_unit,
+                        warehouse_delivery_per_unit=row.warehouse_delivery_per_unit,
+                        other_per_unit=row.other_per_unit,
+                    )
+                )
+            for key in profiles:
+                profiles[key] = sorted(profiles[key], key=lambda item: item.effective_from)
+            return profiles
+    except Exception:
+        # Если PostgreSQL временно недоступен, не ломаем расчёт и используем Excel.
+        pass
+
     baseline = load_costs(costs_path)
     profiles: dict[str, list[CostProfile]] = {
         key: [
@@ -493,13 +581,11 @@ def load_cost_profiles(costs_path: str | Path) -> dict[str, list[CostProfile]]:
     wb.close()
 
     for key in profiles:
-        # Если на одну дату несколько строк, последняя строка файла имеет приоритет.
         dedup: dict[date, CostProfile] = {}
         for profile in profiles[key]:
             dedup[profile.effective_from] = profile
         profiles[key] = sorted(dedup.values(), key=lambda item: item.effective_from)
     return profiles
-
 
 def resolve_cost_profile(
     profiles: dict[str, list[CostProfile]],
@@ -515,6 +601,25 @@ def resolve_cost_profile(
 
 
 def load_external_expenses(costs_path: str | Path) -> list[ExternalExpense]:
+    """Читает общие расходы из PostgreSQL; Excel используется только как резерв."""
+    try:
+        from wb_management import management_store_ready, list_expenses
+
+        if management_store_ready():
+            return [
+                ExternalExpense(
+                    period_start=row.period_start,
+                    period_end=row.period_end,
+                    category=row.category,
+                    amount=row.amount,
+                    sku=row.sku,
+                    comment=row.comment,
+                )
+                for row in list_expenses(limit=5000)
+            ]
+    except Exception:
+        pass
+
     path = _expenses_path(costs_path)
     if not path.exists():
         return []
@@ -581,7 +686,6 @@ def load_external_expenses(costs_path: str | Path) -> list[ExternalExpense]:
         )
     wb.close()
     return expenses
-
 
 def _overlap_share(expense: ExternalExpense, report_start: date, report_end: date) -> float:
     overlap_start = max(expense.period_start, report_start)

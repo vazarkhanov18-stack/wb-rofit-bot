@@ -102,6 +102,44 @@ def init_database() -> None:
                 """
             )
 
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS sale_operations (
+                    id BIGSERIAL PRIMARY KEY,
+                    report_id BIGINT NOT NULL REFERENCES report_snapshots(id) ON DELETE CASCADE,
+                    operation_id TEXT NOT NULL,
+                    operation_date DATE,
+                    operation_type TEXT NOT NULL DEFAULT 'Продажа',
+                    sku TEXT NOT NULL,
+                    nm_id BIGINT,
+                    name TEXT NOT NULL DEFAULT '',
+                    quantity DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    revenue DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    payout DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    wb_expenses DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    logistics DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    transport DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    handling DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    storage DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    other_withholdings DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    fines DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    advertising DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    cogs DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    unit_expenses DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    general_expenses DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    external_expenses DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    profit_before_tax DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    tax DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    profit DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    margin DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    drr DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    missing_cost BOOLEAN NOT NULL DEFAULT FALSE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE (report_id, operation_id)
+                )
+                """
+            )
+
             # Миграция баз, созданных предыдущими версиями.
             report_columns = {
                 "unit_expenses": "DOUBLE PRECISION NOT NULL DEFAULT 0",
@@ -143,6 +181,15 @@ def init_database() -> None:
             )
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_sku_snapshots_nm_id ON sku_snapshots(nm_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sale_operations_date ON sale_operations(operation_date DESC)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sale_operations_sku ON sale_operations(sku)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sale_operations_nm_id ON sale_operations(nm_id)"
             )
 
 
@@ -257,6 +304,91 @@ def save_report(result: ReportResult, *, period_type: str, source: str = "api") 
                     )
                     """,
                     records,
+                )
+
+
+            cursor.execute("DELETE FROM sale_operations WHERE report_id = %s", (report_id,))
+            operation_records = [
+                (
+                    report_id,
+                    op.operation_id,
+                    op.operation_date,
+                    op.operation_type,
+                    op.sku,
+                    op.nm_id,
+                    op.name,
+                    op.quantity,
+                    op.revenue,
+                    op.calculated_payout,
+                    op.revenue - op.calculated_payout,
+                    op.logistics,
+                    op.transport,
+                    op.handling,
+                    op.storage,
+                    op.other_withholdings,
+                    op.fines,
+                    op.advertising,
+                    op.cogs,
+                    op.unit_external_expenses,
+                    op.general_external_expenses,
+                    op.external_expenses,
+                    op.profit_before_tax,
+                    op.tax,
+                    op.profit,
+                    op.margin,
+                    op.drr,
+                    bool(op.missing_cost),
+                )
+                for op in getattr(result, "operations", [])
+            ]
+            if operation_records:
+                cursor.executemany(
+                    """
+                    INSERT INTO sale_operations (
+                        report_id, operation_id, operation_date, operation_type,
+                        sku, nm_id, name, quantity, revenue, payout, wb_expenses,
+                        logistics, transport, handling, storage, other_withholdings,
+                        fines, advertising, cogs, unit_expenses, general_expenses,
+                        external_expenses, profit_before_tax, tax, profit, margin,
+                        drr, missing_cost
+                    ) VALUES (
+                        %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s,
+                        %s, %s
+                    )
+                    ON CONFLICT (report_id, operation_id) DO UPDATE SET
+                        operation_date = EXCLUDED.operation_date,
+                        operation_type = EXCLUDED.operation_type,
+                        sku = EXCLUDED.sku,
+                        nm_id = EXCLUDED.nm_id,
+                        name = EXCLUDED.name,
+                        quantity = EXCLUDED.quantity,
+                        revenue = EXCLUDED.revenue,
+                        payout = EXCLUDED.payout,
+                        wb_expenses = EXCLUDED.wb_expenses,
+                        logistics = EXCLUDED.logistics,
+                        transport = EXCLUDED.transport,
+                        handling = EXCLUDED.handling,
+                        storage = EXCLUDED.storage,
+                        other_withholdings = EXCLUDED.other_withholdings,
+                        fines = EXCLUDED.fines,
+                        advertising = EXCLUDED.advertising,
+                        cogs = EXCLUDED.cogs,
+                        unit_expenses = EXCLUDED.unit_expenses,
+                        general_expenses = EXCLUDED.general_expenses,
+                        external_expenses = EXCLUDED.external_expenses,
+                        profit_before_tax = EXCLUDED.profit_before_tax,
+                        tax = EXCLUDED.tax,
+                        profit = EXCLUDED.profit,
+                        margin = EXCLUDED.margin,
+                        drr = EXCLUDED.drr,
+                        missing_cost = EXCLUDED.missing_cost,
+                        created_at = NOW()
+                    """,
+                    operation_records,
                 )
             return report_id
 
@@ -630,3 +762,188 @@ def list_product_periods(
             )
             return [ProductPeriodRow(**dict(row)) for row in cursor.fetchall()]
 
+
+
+@dataclass(frozen=True)
+class SaleOperationRow:
+    operation_id: str
+    operation_date: date | None
+    operation_type: str
+    period_start: date
+    period_end: date
+    period_type: str
+    sku: str
+    nm_id: int | None
+    name: str
+    quantity: float
+    revenue: float
+    payout: float
+    wb_expenses: float
+    logistics: float
+    transport: float
+    handling: float
+    storage: float
+    other_withholdings: float
+    fines: float
+    advertising: float
+    cogs: float
+    unit_expenses: float
+    general_expenses: float
+    external_expenses: float
+    profit_before_tax: float
+    tax: float
+    profit: float
+    margin: float
+    drr: float
+    missing_cost: bool
+
+
+@dataclass(frozen=True)
+class SaleOperationSummary:
+    operations: int
+    quantity: float
+    revenue: float
+    payout: float
+    wb_expenses: float
+    advertising: float
+    cogs: float
+    external_expenses: float
+    profit_before_tax: float
+    tax: float
+    profit: float
+    margin: float
+    drr: float
+    missing_cost_count: int
+
+
+def _operations_where_sql(
+    *,
+    period_type: str | None = "weekly",
+    date_from: date | None = None,
+    date_to: date | None = None,
+    query: str = "",
+    operation_type: str = "",
+    only_negative: bool = False,
+    only_missing_cost: bool = False,
+) -> tuple[str, list[object]]:
+    clauses: list[str] = []
+    params: list[object] = []
+    if period_type:
+        clauses.append("r.period_type = %s")
+        params.append(period_type)
+    if date_from is not None:
+        clauses.append("COALESCE(o.operation_date, r.period_start) >= %s")
+        params.append(date_from)
+    if date_to is not None:
+        clauses.append("COALESCE(o.operation_date, r.period_end) <= %s")
+        params.append(date_to)
+    if query:
+        pattern = f"%{query.strip()}%"
+        clauses.append(
+            "(o.sku ILIKE %s OR COALESCE(o.name, '') ILIKE %s OR COALESCE(CAST(o.nm_id AS TEXT), '') ILIKE %s)"
+        )
+        params.extend([pattern, pattern, pattern])
+    if operation_type:
+        clauses.append("o.operation_type = %s")
+        params.append(operation_type)
+    if only_negative:
+        clauses.append("o.profit < -0.000001")
+    if only_missing_cost:
+        clauses.append("o.missing_cost = TRUE")
+    return ("WHERE " + " AND ".join(clauses)) if clauses else "", params
+
+
+def list_sale_operations(
+    limit: int = 500,
+    *,
+    period_type: str | None = "weekly",
+    date_from: date | None = None,
+    date_to: date | None = None,
+    query: str = "",
+    operation_type: str = "",
+    only_negative: bool = False,
+    only_missing_cost: bool = False,
+) -> list[SaleOperationRow]:
+    limit = max(1, min(int(limit), 5000))
+    where_sql, params = _operations_where_sql(
+        period_type=period_type,
+        date_from=date_from,
+        date_to=date_to,
+        query=query,
+        operation_type=operation_type,
+        only_negative=only_negative,
+        only_missing_cost=only_missing_cost,
+    )
+    params.append(limit)
+    with _connect() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                f"""
+                SELECT
+                    o.operation_id, o.operation_date, o.operation_type,
+                    r.period_start, r.period_end, r.period_type,
+                    o.sku, o.nm_id, o.name, o.quantity, o.revenue, o.payout,
+                    o.wb_expenses, o.logistics, o.transport, o.handling, o.storage,
+                    o.other_withholdings, o.fines, o.advertising, o.cogs,
+                    o.unit_expenses, o.general_expenses, o.external_expenses,
+                    o.profit_before_tax, o.tax, o.profit, o.margin, o.drr,
+                    o.missing_cost
+                FROM sale_operations o
+                JOIN report_snapshots r ON r.id = o.report_id
+                {where_sql}
+                ORDER BY COALESCE(o.operation_date, r.period_start) DESC, o.id DESC
+                LIMIT %s
+                """,
+                tuple(params),
+            )
+            return [SaleOperationRow(**dict(row)) for row in cursor.fetchall()]
+
+
+def sale_operations_summary(
+    *,
+    period_type: str | None = "weekly",
+    date_from: date | None = None,
+    date_to: date | None = None,
+    query: str = "",
+    operation_type: str = "",
+    only_negative: bool = False,
+    only_missing_cost: bool = False,
+) -> SaleOperationSummary:
+    where_sql, params = _operations_where_sql(
+        period_type=period_type,
+        date_from=date_from,
+        date_to=date_to,
+        query=query,
+        operation_type=operation_type,
+        only_negative=only_negative,
+        only_missing_cost=only_missing_cost,
+    )
+    with _connect() as connection:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                f"""
+                SELECT
+                    COUNT(*)::INTEGER AS operations,
+                    COALESCE(SUM(o.quantity), 0) AS quantity,
+                    COALESCE(SUM(o.revenue), 0) AS revenue,
+                    COALESCE(SUM(o.payout), 0) AS payout,
+                    COALESCE(SUM(o.wb_expenses), 0) AS wb_expenses,
+                    COALESCE(SUM(o.advertising), 0) AS advertising,
+                    COALESCE(SUM(o.cogs), 0) AS cogs,
+                    COALESCE(SUM(o.external_expenses), 0) AS external_expenses,
+                    COALESCE(SUM(o.profit_before_tax), 0) AS profit_before_tax,
+                    COALESCE(SUM(o.tax), 0) AS tax,
+                    COALESCE(SUM(o.profit), 0) AS profit,
+                    CASE WHEN ABS(COALESCE(SUM(o.revenue), 0)) > 0.000001
+                         THEN COALESCE(SUM(o.profit), 0) / SUM(o.revenue) ELSE 0 END AS margin,
+                    CASE WHEN ABS(COALESCE(SUM(o.revenue), 0)) > 0.000001
+                         THEN COALESCE(SUM(o.advertising), 0) / SUM(o.revenue) ELSE 0 END AS drr,
+                    COALESCE(SUM(CASE WHEN o.missing_cost THEN 1 ELSE 0 END), 0)::INTEGER AS missing_cost_count
+                FROM sale_operations o
+                JOIN report_snapshots r ON r.id = o.report_id
+                {where_sql}
+                """,
+                tuple(params),
+            )
+            row = cursor.fetchone() or {}
+            return SaleOperationSummary(**dict(row))

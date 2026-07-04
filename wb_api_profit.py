@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import date
+import hashlib
+import json
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -8,6 +10,7 @@ from wb_api import AdvertisingStats
 from wb_profit import (
     UNALLOCATED_SKU,
     ReportResult,
+    SaleOperation,
     SkuResult,
     apply_external_expenses,
     as_date,
@@ -40,6 +43,61 @@ def _transaction_date(row: dict[str, Any], fallback: date | None = None) -> date
             return parsed
     return fallback
 
+
+
+
+def _operation_id(row: dict[str, Any], *, sku_key: str, operation_type: str, transaction_date: date | None) -> str:
+    for key in ("rrdId", "rrd_id", "srid", "realizationreport_id", "realizationReportId", "giId", "barcode"):
+        value = _value(row, key, "")
+        if value not in (None, ""):
+            base = f"{key}:{value}|{operation_type}|{sku_key}|{_value(row, 'retailAmount', '')}|{_value(row, 'quantity', '')}"
+            return hashlib.sha1(base.encode("utf-8", errors="ignore")).hexdigest()
+    payload = {
+        "sku": sku_key,
+        "type": operation_type,
+        "date": transaction_date.isoformat() if transaction_date else "",
+        "nmId": _value(row, "nmId", ""),
+        "barcode": _value(row, "sku", ""),
+        "revenue": _value(row, "retailAmount", ""),
+        "qty": _value(row, "quantity", ""),
+        "payout": _value(row, "forPay", ""),
+    }
+    return hashlib.sha1(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def _allocate_item_overheads_to_operations(result: ReportResult) -> None:
+    """Распределяет рекламу и общие внешние расходы SKU по операциям внутри отчёта."""
+    if not result.operations:
+        return
+
+    by_key: dict[str, SkuResult] = {}
+    by_nm: dict[int, SkuResult] = {}
+    for item in result.items:
+        by_key[normalize_sku(item.sku)] = item
+        if item.nm_id is not None:
+            by_nm[int(item.nm_id)] = item
+
+    op_groups: dict[str, list[SaleOperation]] = {}
+    for op in result.operations:
+        op.advertising = 0.0
+        op.general_external_expenses = 0.0
+        key = normalize_sku(op.sku)
+        op_groups.setdefault(key, []).append(op)
+
+    for key, ops in op_groups.items():
+        item = by_key.get(key)
+        if item is None and ops and ops[0].nm_id is not None:
+            item = by_nm.get(int(ops[0].nm_id))
+        if item is None:
+            continue
+        weight_total = sum(abs(op.revenue) for op in ops) or sum(abs(op.quantity) for op in ops) or len(ops)
+        if weight_total <= 0:
+            weight_total = len(ops)
+        for op in ops:
+            weight = abs(op.revenue) or abs(op.quantity) or 1.0
+            share = weight / weight_total if weight_total else 0.0
+            op.advertising = item.advertising * share
+            op.general_external_expenses = item.general_external_expenses * share
 
 def analyze_api_report(
     rows: Iterable[dict[str, Any]],
@@ -80,6 +138,7 @@ def analyze_api_report(
     starts: list[date] = []
     ends: list[date] = []
     missing_keys: set[str] = set()
+    operations: list[SaleOperation] = []
 
     for row in rows:
         reason = normalize_text(_value(row, "sellerOperName") or _value(row, "docTypeName"))
@@ -145,14 +204,51 @@ def analyze_api_report(
             item.payout_for_goods += payout
 
             profile = resolve_cost_profile(profiles, sku_key, transaction_date)
+            unit_cost = 0.0
+            unit_external_expense = 0.0
+            missing_cost = False
             if profile is None:
                 missing_keys.add(item.sku)
+                missing_cost = True
             else:
+                unit_cost = profile.unit_cost
+                unit_external_expense = profile.unit_external_expense
                 item.unit_cost = profile.unit_cost
                 if not item.name:
                     item.name = profile.name
                 item.cogs_amount += qty * profile.unit_cost
                 item.unit_external_expenses += qty * profile.unit_external_expense
+
+            logistics = as_number(_value(row, "deliveryService"))
+            transport = as_number(_value(row, "rebillLogisticCost"))
+            handling = as_number(_value(row, "paidAcceptance"))
+            storage = as_number(_value(row, "paidStorage"))
+            other_withholdings = as_number(_value(row, "deduction"))
+            fines = as_number(_value(row, "penalty"))
+            op_type = "Возврат" if is_return else "Продажа"
+            operations.append(
+                SaleOperation(
+                    operation_id=_operation_id(row, sku_key=sku_key, operation_type=op_type, transaction_date=transaction_date),
+                    operation_date=transaction_date,
+                    operation_type=op_type,
+                    sku=item.sku,
+                    name=item.name or report_names.get(sku_key, item.sku),
+                    nm_id=nm_id or item.nm_id,
+                    quantity=qty,
+                    revenue=revenue,
+                    payout_for_goods=payout,
+                    logistics=logistics,
+                    transport=transport,
+                    handling=handling,
+                    storage=storage,
+                    other_withholdings=other_withholdings,
+                    fines=fines,
+                    unit_cost=unit_cost,
+                    cogs=qty * unit_cost,
+                    unit_external_expenses=qty * unit_external_expense,
+                    missing_cost=missing_cost,
+                )
+            )
 
         item.logistics += as_number(_value(row, "deliveryService"))
         item.transport += as_number(_value(row, "rebillLogisticCost"))
@@ -165,9 +261,11 @@ def analyze_api_report(
         period_start=min(starts) if starts else requested_start,
         period_end=max(ends) if ends else requested_end,
         items=[item for item in results.values() if item.has_activity],
+        operations=operations,
         missing_cost_skus=sorted(missing_keys),
     )
     apply_external_expenses(result, costs_path)
+    _allocate_item_overheads_to_operations(result)
     result.items.sort(key=lambda item: (item.revenue, item.profit), reverse=True)
     return result
 
@@ -207,4 +305,5 @@ def apply_advertising(result: ReportResult, stats: AdvertisingStats) -> ReportRe
     result.advertising_campaign_count = stats.campaign_count
     result.items = [item for item in result.items if item.has_activity]
     result.items.sort(key=lambda item: (item.revenue, item.profit), reverse=True)
+    _allocate_item_overheads_to_operations(result)
     return result
