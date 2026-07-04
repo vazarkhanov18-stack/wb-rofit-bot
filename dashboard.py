@@ -129,9 +129,9 @@ UNIT_TEMPLATE = r"""
 
 UNIT_CALCULATOR_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Калькулятор юнитки · {{ title }}</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
-<header><div><h1>Калькулятор юнит-экономики</h1><div class="subtitle">Плановый расчёт товара: цена, СПП, выкуп, комиссия, логистика, реклама, налоги и чистая прибыль</div></div><div class="badge">Ручной сценарий + тарифы WB · v20</div></header>
+<header><div><h1>Калькулятор юнит-экономики</h1><div class="subtitle">Плановый расчёт товара: цена, СПП, выкуп, комиссия, логистика, реклама, налоги и чистая прибыль</div></div><div class="badge">Ручной сценарий + тарифы WB · v27</div></header>
 <nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/unit-economics">Юнит-экономика</a><a class="active" href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
-<div class="hint" style="margin:0 0 16px">Это плановый калькулятор. В v20 можно вручную считать сценарии, частично подтягивать тарифы WB и сохранять готовые расчёты как шаблоны прямо в браузере. Комиссию WB пока оставь вручную или используй фактическую долю из отчётов, потому что для точной комиссии нужен предмет/категория товара.</div>
+<div class="hint" style="margin:0 0 16px">Это плановый калькулятор. Можно считать сценарии вручную, выбирать склад из тарифов WB или свой FBS-СЦ вручную, подтягивать фактическую логистику из продаж и сохранять расчёты в PostgreSQL. Комиссию WB пока оставь вручную или используй фактическую долю из отчётов, потому что для точной комиссии нужен предмет/категория товара.</div>
 {% if tariff_notice %}<div class="notice {{ tariff_notice.kind }}">{{ tariff_notice.text }}</div>{% endif %}
 <form method="get" class="section">
 <div class="card"><div class="section-head"><div><h2>1. Основные расходы</h2><div class="subtitle">Товар, цена, СПП, выкуп, комиссия и закупка</div></div></div>
@@ -150,7 +150,8 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 <div class="card section"><div class="section-head"><div><h2>2. Логистика</h2><div class="subtitle">Габариты, упаковка, склад, локализация, приёмка и хранение</div></div></div>
 <div class="form-grid">
 <div class="field"><label>Тип упаковки</label><select name="package_type"><option value="box" {% if values.package_type == 'box' %}selected{% endif %}>Короб</option><option value="mono" {% if values.package_type == 'mono' %}selected{% endif %}>Монопаллета</option></select></div>
-<div class="field"><label>Склад WB</label>{% if warehouse_options %}<select name="warehouse" id="warehouseSelect"><option value="">Выбери склад WB</option>{% if values.warehouse and values.warehouse not in warehouse_options %}<option value="{{ values.warehouse }}" selected>{{ values.warehouse }}</option>{% endif %}{% for wh in warehouse_options %}<option value="{{ wh }}" {% if values.warehouse == wh %}selected{% endif %}>{{ wh }}</option>{% endfor %}</select>{% else %}<input name="warehouse" value="{{ values.warehouse }}" placeholder="Например, Коледино / Электросталь">{% endif %}<div class="hint" style="margin-top:6px">Список складов подтягивается из тарифов WB по выбранному типу упаковки и дате. После выбора склада тарифы подтянутся автоматически.</div></div>
+<div class="field"><label>Режим склада</label><select name="warehouse_mode"><option value="api" {% if values.warehouse_mode == 'api' %}selected{% endif %}>Склад из тарифов WB</option><option value="manual" {% if values.warehouse_mode == 'manual' %}selected{% endif %}>Мой FBS-склад вручную</option></select><div class="hint" style="margin-top:6px">Если в тарифном API нет твоего СЦ, например СЦ Владикавказ, выбери ручной режим.</div></div>
+<div class="field"><label>{% if values.warehouse_mode == 'manual' %}Мой FBS-склад{% else %}Склад WB{% endif %}</label>{% if values.warehouse_mode == 'manual' %}<input name="warehouse" list="manualFbsPoints" value="{{ values.warehouse }}" placeholder="Например, СЦ Владикавказ"><datalist id="manualFbsPoints">{% for wh in manual_warehouses %}<option value="{{ wh }}">{% endfor %}</datalist>{% elif warehouse_options %}<select name="warehouse" id="warehouseSelect"><option value="">Выбери склад WB</option>{% if values.warehouse and values.warehouse not in warehouse_options %}<option value="{{ values.warehouse }}" selected>{{ values.warehouse }}</option>{% endif %}{% for wh in warehouse_options %}<option value="{{ wh }}" {% if values.warehouse == wh %}selected{% endif %}>{{ wh }}</option>{% endfor %}</select>{% else %}<input name="warehouse" value="{{ values.warehouse }}" placeholder="Например, Коледино / Электросталь">{% endif %}<div class="hint" style="margin-top:6px">В режиме WB список берётся из тарифов. В ручном FBS-режиме можно указать любой СЦ и заполнить тарифы вручную или по фактическим продажам.</div></div>
 <div class="field"><label>Дата тарифов WB</label><input type="date" name="tariff_date" value="{{ values.tariff_date }}"></div>
 <div class="field"><label>Индекс локализации, %</label><input inputmode="decimal" name="localization_pct" value="{{ percent_input(values.localization_pct) }}"></div>
 <div class="field"><label>ИРП / коэффициент</label><input inputmode="decimal" name="irp" value="{{ number_input(values.irp) }}"></div>
@@ -177,7 +178,7 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 <div class="field"><label>Прочие расходы / шт., ₽</label><input inputmode="decimal" name="other_cost" value="{{ number_input(values.other_cost) }}"></div>
 <div class="field"><label>Брак, % от закупа</label><input inputmode="decimal" name="defect_pct" value="{{ percent_input(values.defect_pct) }}"></div>
 <div class="field"><label>Целевая маржа, %</label><input inputmode="decimal" name="target_margin" value="{{ percent_input(values.target_margin) }}"></div>
-</div><div class="form-actions"><button type="submit">Рассчитать юнитку</button><button class="secondary" type="submit" name="autoload_tariffs" value="1">Подтянуть тарифы WB</button><a class="button secondary" href="/unit-calculator">Сбросить</a></div></div>
+</div><div class="form-actions"><button type="submit">Рассчитать юнитку</button><button class="secondary" type="submit" name="autoload_tariffs" value="1">Подтянуть тарифы WB</button><button class="secondary" type="submit" name="actual_logistics" value="1">Подставить фактическую логистику из продаж</button><a class="button secondary" href="/unit-calculator">Сбросить</a></div></div>
 
 </form>
 
@@ -209,7 +210,7 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 </div>
 
 <div class="section two-col"><div class="card"><div class="section-head"><div><h2>Расчёт по строкам</h2><div class="subtitle">Как на калькуляторе: партия, юнитка и доля в выручке</div></div></div><div class="table-wrap"><table style="min-width:960px"><thead><tr><th>Показатель</th><th>Партия</th><th>Unit-экономика</th><th>Доля в выручке</th></tr></thead><tbody>{% for row in breakdown %}<tr><td>{{ row.label }}</td><td class="{{ row.cls }}">{{ row.batch }}</td><td class="{{ row.cls }}">{{ row.unit }}</td><td>{{ row.share }}</td></tr>{% endfor %}</tbody></table></div></div>
-<div class="card"><h2>Пояснение</h2><div class="hint"><b>Цена с СПП</b> — это цена, которую видит покупатель. Если указан СПП %, калькулятор считает <b>расчётную цену до СПП</b> и уже от неё считает комиссию, ДРР, налог и прибыль. <b>Выкуп</b> влияет только на логистику: логистика к покупателю делится на процент выкупа, а обратная логистика добавляется на невыкупленные заказы. Колонка <b>Партия</b> теперь считается по количеству закупа, поэтому при закупе 1 шт. она совпадает с unit-экономикой.</div><div class="summary" style="margin-top:14px"><span>Схема: {{ values.scheme|upper }}</span><span>Упаковка: {{ 'Монопаллета' if values.package_type == 'mono' else 'Короб' }}</span><span>Склад: {{ values.warehouse or 'не указан' }}</span><span>Цена с СПП: {{ money(calc.price_spp) if calc.price_spp else '—' }}</span><span>Расчётная цена до СПП: {{ money(calc.price_before_spp) if calc.price_before_spp else '—' }}</span></div></div></div>
+<div class="card"><h2>Пояснение</h2><div class="hint"><b>Цена с СПП</b> — это цена, которую видит покупатель. Если указан СПП %, калькулятор считает <b>расчётную цену до СПП</b> и уже от неё считает комиссию, ДРР, налог и прибыль. <b>Выкуп</b> влияет только на логистику: логистика к покупателю делится на процент выкупа, а обратная логистика добавляется на невыкупленные заказы. Для FBS-СЦ, которого нет в тарифах WB, используй режим <b>Мой FBS-склад вручную</b> или кнопку фактической логистики из продаж. Колонка <b>Партия</b> считается по количеству закупа, поэтому при закупе 1 шт. она совпадает с unit-экономикой.</div><div class="summary" style="margin-top:14px"><span>Схема: {{ values.scheme|upper }}</span><span>Упаковка: {{ 'Монопаллета' if values.package_type == 'mono' else 'Короб' }}</span><span>Режим склада: {{ 'ручной FBS' if values.warehouse_mode == 'manual' else 'тарифы WB' }}</span><span>Склад: {{ values.warehouse or 'не указан' }}</span><span>Цена с СПП: {{ money(calc.price_spp) if calc.price_spp else '—' }}</span><span>Расчётная цена до СПП: {{ money(calc.price_before_spp) if calc.price_before_spp else '—' }}</span></div></div></div>
 {% endif %}
 
 <script>
@@ -222,7 +223,7 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 
   function show(text){ if(!msg) return; msg.style.display='block'; msg.textContent=text; }
   function escapeHtml(x){ return String(x || '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch])); }
-  function currentParams(){ const params = new URLSearchParams(new FormData(form)); params.delete('autoload_tariffs'); return params; }
+  function currentParams(){ const params = new URLSearchParams(new FormData(form)); params.delete('autoload_tariffs'); params.delete('actual_logistics'); return params; }
   function titleFromParams(params){
     const name = (params.get('product_name') || params.get('sku') || 'Новый товар').trim();
     const scheme = (params.get('scheme') || 'fbs').toUpperCase();
@@ -299,6 +300,7 @@ UNIT_CALCULATOR_TEMPLATE = r"""
   loadScenarios();
   document.getElementById('warehouseSelect')?.addEventListener('change', () => {
     const params = currentParams();
+    params.delete('actual_logistics');
     params.set('autoload_tariffs', '1');
     location.href = '/unit-calculator?' + params.toString();
   });
@@ -790,6 +792,14 @@ TARIFF_BOX_URL = "https://common-api.wildberries.ru/api/v1/tariffs/box"
 TARIFF_PALLET_URL = "https://common-api.wildberries.ru/api/v1/tariffs/pallet"
 TARIFF_RETURN_URL = "https://common-api.wildberries.ru/api/v1/tariffs/return"
 
+COMMON_FBS_POINTS = [
+    "СЦ Владикавказ",
+    "СЦ Ногир",
+    "СЦ Грозный",
+    "ПВЗ / пункт выдачи",
+    "Другой FBS-СЦ",
+]
+
 
 def _query_tariff_date() -> str:
     raw = request.args.get("tariff_date", "").strip()
@@ -822,7 +832,7 @@ def _wb_tariff_headers() -> dict[str, str]:
     return {
         "Authorization": token,
         "Accept": "application/json",
-        "User-Agent": "WB-Profit-Dashboard/26.0",
+        "User-Agent": "WB-Profit-Dashboard/27.0",
     }
 
 
@@ -892,9 +902,11 @@ def _load_tariff_warehouse_names(package_type: str, tariff_date: str) -> tuple[l
 
 
 def _apply_wb_tariffs(values: DotDict) -> tuple[DotDict, DotDict]:
+    if str(values.get("warehouse_mode") or "api") == "manual":
+        return values, DotDict({"kind": "ok", "text": "Выбран ручной FBS-склад. Тарифный API WB для него не применяется: укажи логистику вручную или нажми «Подставить фактическую логистику из продаж»."})
     warehouse = str(values.warehouse or "").strip()
     if not warehouse:
-        return values, DotDict({"kind": "error", "text": "Укажи склад, например Коледино или Электросталь, затем нажми «Подтянуть тарифы WB»."})
+        return values, DotDict({"kind": "error", "text": "Выбери склад WB из списка, затем нажми «Подтянуть тарифы WB». Для СЦ Владикавказ используй режим «Мой FBS-склад вручную»."})
     tariff_date = str(values.tariff_date or date.today().isoformat())
     package_type = str(values.package_type or "box")
     try:
@@ -959,6 +971,47 @@ def _apply_wb_tariffs(values: DotDict) -> tuple[DotDict, DotDict]:
         return values, DotDict({"kind": "error", "text": str(exc)})
 
 
+
+def _apply_actual_logistics_from_sales(values: "DotDict") -> tuple["DotDict", "DotDict"]:
+    sku = str(values.sku or "").strip()
+    query = sku or str(values.product_name or "").strip()
+    if not query:
+        return values, DotDict({"kind": "error", "text": "Выбери товар или укажи артикул/название, чтобы взять фактическую логистику из истории продаж."})
+    try:
+        rows = list_sale_operations(limit=5000, period_type="weekly", query=query, operation_type="sale")
+    except Exception as exc:
+        logger.warning("failed to load sale operations for actual logistics", exc_info=True)
+        return values, DotDict({"kind": "error", "text": f"Не удалось загрузить историю продаж из PostgreSQL: {exc}"})
+    if sku:
+        key = sku.casefold()
+        rows = [r for r in rows if str(getattr(r, "sku", "") or "").casefold() == key]
+    rows = [r for r in rows if float(getattr(r, "quantity", 0) or 0) > 0]
+    if not rows:
+        return values, DotDict({"kind": "error", "text": "По выбранному товару нет сохранённых продаж. Сначала загрузи историю через /backfill или выбери другой товар."})
+    qty = sum(abs(float(getattr(r, "quantity", 0) or 0)) for r in rows) or 1.0
+    logistics = sum(abs(float(getattr(r, "logistics", 0) or 0)) for r in rows)
+    handling = sum(abs(float(getattr(r, "handling", 0) or 0)) for r in rows)
+    storage = sum(abs(float(getattr(r, "storage", 0) or 0)) for r in rows)
+    other = sum(abs(float(getattr(r, "other_withholdings", 0) or 0)) + abs(float(getattr(r, "fines", 0) or 0)) for r in rows)
+    wb_exp = sum(abs(float(getattr(r, "wb_expenses", 0) or 0)) for r in rows)
+    # If detailed logistics has not been split yet, do not invent it from total WB expenses.
+    # Keep commission separate and only fill fields that are actually detailed in sales history.
+    if logistics > 0:
+        values.base_logistics = logistics / qty
+        values.extra_liter_cost = 0.0
+        values.return_logistics = 0.0
+    if handling > 0:
+        values.acceptance = handling / qty
+    if storage > 0:
+        values.turnover_days = 1.0
+        values.storage_per_day = storage / qty
+    if other > 0:
+        values.tariff_options = float(values.tariff_options or 0) + other / qty
+    if logistics <= 0 and handling <= 0 and storage <= 0 and other <= 0:
+        return values, DotDict({"kind": "error", "text": "В истории продаж есть товар, но детальная логистика/приёмка/хранение пока равны 0. Запусти /backfill после обновления v25 или укажи тарифы вручную."})
+    return values, DotDict({"kind": "ok", "text": f"Подставил фактические расходы из {len(rows)} операций: логистика {logistics/qty:.2f} ₽/шт., приёмка {handling/qty:.2f} ₽/шт., хранение {storage/qty:.2f} ₽/шт., прочие WB {other/qty:.2f} ₽/шт. Общие WB-удержания в истории: {wb_exp/qty:.2f} ₽/шт."})
+
+
 class DotDict(dict):
     __getattr__ = dict.get
 
@@ -986,6 +1039,7 @@ def _unit_calculator_values(product_summary=None) -> DotDict:
         "purchase_qty": max(0.0, _query_float("purchase_qty", 1)),
         "purchase_price": _query_float("purchase_price", _div(cogs, units)),
         "package_type": request.args.get("package_type", "box").strip().lower() if request.args.get("package_type", "box").strip().lower() in {"box", "mono"} else "box",
+        "warehouse_mode": request.args.get("warehouse_mode", "api").strip().lower() if request.args.get("warehouse_mode", "api").strip().lower() in {"api", "manual"} else "api",
         "warehouse": request.args.get("warehouse", "").strip()[:100],
         "tariff_date": _query_tariff_date(),
         "localization_pct": _query_rate("localization_pct", 1, min_value=0, max_value=10),
@@ -1703,11 +1757,15 @@ def unit_calculator():
         product_summary = next((p for p in products if (p.sku or "").casefold() == key), None)
     values = _unit_calculator_values(product_summary)
     tariff_notice = None
-    warehouse_options, wh_notice = _load_tariff_warehouse_names(str(values.package_type or "box"), str(values.tariff_date or date.today().isoformat()))
-    if wh_notice and not tariff_notice:
-        tariff_notice = wh_notice
+    warehouse_options: list[str] = []
+    if str(values.warehouse_mode or "api") == "api":
+        warehouse_options, wh_notice = _load_tariff_warehouse_names(str(values.package_type or "box"), str(values.tariff_date or date.today().isoformat()))
+        if wh_notice and not tariff_notice:
+            tariff_notice = wh_notice
     if request.args.get("autoload_tariffs"):
         values, tariff_notice = _apply_wb_tariffs(values)
+    if request.args.get("actual_logistics"):
+        values, tariff_notice = _apply_actual_logistics_from_sales(values)
     calculated = bool(request.args)
     calc, breakdown = _calculate_unit_plan(values) if calculated else (DotDict(), [])
     return render_template_string(
@@ -1716,6 +1774,7 @@ def unit_calculator():
         products=products,
         values=values,
         warehouse_options=warehouse_options,
+        manual_warehouses=COMMON_FBS_POINTS,
         tariff_notice=tariff_notice,
         calculated=calculated,
         calc=calc,
