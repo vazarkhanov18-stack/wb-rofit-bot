@@ -75,7 +75,7 @@ table{width:100%;border-collapse:collapse;min-width:1050px}th,td{padding:11px 10
 DASHBOARD_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>{{ title }}</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>{{ title }}</h1><div class="subtitle">Финансы Wildberries · история себестоимости · внешний P&amp;L</div></div><div class="badge">Последнее сохранение: {{ latest_created }}</div></header>
-<nav class="nav"><a class="active" href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a class="active" href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><select name="period_type" aria-label="Тип периода"><option value="" {% if not selected_type %}selected{% endif %}>Все сохранённые периоды</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Загруженные Excel</option></select><button type="submit">Показать</button></form>
 {% if latest %}<div class="grid">
 <div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(latest.revenue) }}</div></div><div class="card"><div class="label">Расчётная выплата</div><div class="value">{{ money(latest.payout) }}</div></div><div class="card"><div class="label">Прибыль до налога</div><div class="value {{ 'good' if latest.profit_before_tax >= 0 else 'bad' }}">{{ money(latest.profit_before_tax) }}</div></div><div class="card"><div class="label">УСН 6%</div><div class="value">{{ money(latest.tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if latest.profit >= 0 else 'bad' }}">{{ money(latest.profit) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(latest.cogs) }}</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(latest.external_expenses) }}</div></div><div class="card"><div class="label">Реклама WB</div><div class="value">{{ money(latest.advertising) }}</div></div><div class="card"><div class="label">ДРР / Маржа</div><div class="value {{ margin_class(latest.margin) }}">{{ percent(latest.drr) }} / {{ percent(latest.margin) }}</div></div><div class="card"><div class="label">Продано</div><div class="value">{{ units(latest.units) }} шт.</div></div></div>
@@ -91,7 +91,7 @@ DASHBOARD_TEMPLATE = r"""
 PRODUCTS_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Товары · {{ title }}</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Аналитика по товарам</h1><div class="subtitle">Прибыль, маржа и ДРР каждого SKU за выбранные сохранённые периоды</div></div><div class="badge">Найдено товаров: {{ totals.products }}</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a class="active" href="/products">Товары</a><a href="/sales">История продаж</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a class="active" href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><label>Периоды<select name="period_type"><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select></label><label>С даты<input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату<input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск<input name="q" value="{{ query }}" placeholder="Название, артикул или nmID"></label><button type="submit">Показать</button>{% if query or date_from_value or date_to_value %}<a class="button secondary" href="/products?period_type={{ selected_type }}">Сбросить</a>{% endif %}</form>
 <div class="hint">Чтобы суммы не задваивались, здесь одновременно используется только один тип периодов. По умолчанию выбраны закрытые недельные отчёты.</div>
 {% if rows %}<div class="grid section"><div class="card"><div class="label">Товаров</div><div class="value">{{ totals.products }}</div></div><div class="card"><div class="label">Продано</div><div class="value">{{ units(totals.units) }} шт.</div></div><div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(totals.revenue) }}</div></div><div class="card"><div class="label">Прибыль до налога</div><div class="value {{ 'good' if totals.profit_before_tax >= 0 else 'bad' }}">{{ money(totals.profit_before_tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if totals.profit >= 0 else 'bad' }}">{{ money(totals.profit) }}</div></div><div class="card"><div class="label">Маржа</div><div class="value {{ margin_class(totals.margin) }}">{{ percent(totals.margin) }}</div></div><div class="card"><div class="label">Реклама WB</div><div class="value">{{ money(totals.advertising) }}</div></div><div class="card"><div class="label">ДРР</div><div class="value">{{ percent(totals.drr) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(totals.cogs) }}</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(totals.external_expenses) }}</div></div></div>
@@ -103,7 +103,7 @@ PRODUCTS_TEMPLATE = r"""
 PRODUCT_DETAIL_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>{{ summary.name }} · {{ title }}</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><div class="product-title"><h1>{{ summary.name or summary.sku }}</h1><span class="sku-chip">{{ summary.sku }}</span>{% if summary.nm_id %}<span class="sku-chip">nmID {{ summary.nm_id }}</span>{% endif %}</div><div class="subtitle">Юнит-экономика товара по сохранённым периодам</div></div><div class="badge">{{ period(summary.first_period, summary.last_period) }}</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a class="active" href="/products?period_type={{ selected_type }}">Товары</a><a href="/sales">История продаж</a><a href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a class="active" href="/products?period_type={{ selected_type }}">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><input type="hidden" name="sku" value="{{ summary.sku }}"><label>Периоды<select name="period_type"><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select></label><label>С даты<input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату<input type="date" name="date_to" value="{{ date_to_value }}"></label><button type="submit">Показать</button><a class="button secondary" href="/products?period_type={{ selected_type }}">К списку товаров</a></form>
 <div class="grid"><div class="card"><div class="label">Продано</div><div class="value">{{ units(summary.units) }} шт.</div></div><div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(summary.revenue) }}</div></div><div class="card"><div class="label">Расчётная выплата</div><div class="value">{{ money(summary.payout) }}</div></div><div class="card"><div class="label">Прибыль до налога</div><div class="value {{ 'good' if summary.profit_before_tax >= 0 else 'bad' }}">{{ money(summary.profit_before_tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if summary.profit >= 0 else 'bad' }}">{{ money(summary.profit) }}</div></div><div class="card"><div class="label">Прибыль / шт.</div><div class="value {{ 'good' if profit_per_unit >= 0 else 'bad' }}">{{ money(profit_per_unit) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(summary.cogs) }}</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(summary.external_expenses) }}</div></div><div class="card"><div class="label">Реклама / ДРР</div><div class="value">{{ money(summary.advertising) }} / {{ percent(summary.drr) }}</div></div><div class="card"><div class="label">Маржа</div><div class="value {{ margin_class(summary.margin) }}">{{ percent(summary.margin) }}</div></div></div>
 <div class="section card"><div class="section-head"><div><h2>Динамика товара</h2><div class="subtitle">Доход, прибыль до налога и чистая прибыль</div></div><span class="muted">{{ summary.periods }} периодов</span></div><div class="chart-box"><canvas id="productChart"></canvas></div></div>
@@ -117,7 +117,7 @@ PRODUCT_DETAIL_TEMPLATE = r"""
 UNIT_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Юнит-экономика · {{ title }}</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Юнит-экономика</h1><div class="subtitle">Цена, выплата WB, расходы, налог, реклама, маржа и точка безубыточности по каждому SKU</div></div><div class="badge">Товаров: {{ totals.products }}</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a class="active" href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a class="active" href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><label>Периоды<select name="period_type"><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select></label><label>С даты<input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату<input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск<input name="q" value="{{ query }}" placeholder="Название, артикул или nmID"></label><label>Целевая маржа, %<input inputmode="decimal" name="target_margin" value="{{ target_margin_input }}"></label><label>Сценарий ДРР, %<input inputmode="decimal" name="scenario_drr" value="{{ scenario_drr_input }}"></label><button type="submit">Пересчитать</button></form>
 <div class="hint">Расчёт основан на сохранённых отчётах PostgreSQL. Для корректности используй один тип периодов, лучше <b>недельные</b>, чтобы не смешивать дневные и недельные отчёты. Точка безубыточности считается приблизительно: предполагается, что доля выплаты WB от цены остаётся такой же, как в выбранном периоде.</div>
 {% if rows %}<div class="grid section"><div class="card"><div class="label">Продано</div><div class="value">{{ units(totals.units) }} шт.</div></div><div class="card"><div class="label">Средняя цена</div><div class="value">{{ money(totals.avg_price) }}</div></div><div class="card"><div class="label">Прибыль / шт.</div><div class="value {{ 'good' if totals.profit_per_unit >= 0 else 'bad' }}">{{ money(totals.profit_per_unit) }}</div></div><div class="card"><div class="label">Маржа</div><div class="value {{ margin_class(totals.margin) }}">{{ percent(totals.margin) }}</div></div><div class="card"><div class="label">ДРР</div><div class="value">{{ percent(totals.drr) }}</div></div><div class="card"><div class="label">Макс ДРР до нуля</div><div class="value {{ 'bad' if totals.max_drr_zero < totals.drr else 'good' }}">{{ percent(totals.max_drr_zero) }}</div></div><div class="card"><div class="label">Макс ДРР для цели</div><div class="value {{ 'bad' if totals.max_drr_target < totals.drr else 'good' }}">{{ percent(totals.max_drr_target) }}</div></div><div class="card"><div class="label">Сценарий прибыль</div><div class="value {{ 'good' if totals.scenario_profit >= 0 else 'bad' }}">{{ money(totals.scenario_profit) }}</div></div><div class="card"><div class="label">Сценарий маржа</div><div class="value {{ margin_class(totals.scenario_margin) }}">{{ percent(totals.scenario_margin) }}</div></div><div class="card"><div class="label">Товаров в минус</div><div class="value {{ 'bad' if totals.loss_products else 'good' }}">{{ totals.loss_products }}</div></div></div>
@@ -131,7 +131,7 @@ UNIT_TEMPLATE = r"""
 UNIT_CALCULATOR_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Калькулятор юнитки · {{ title }}</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Калькулятор юнит-экономики</h1><div class="subtitle">Плановый расчёт товара: цена, СПП, выкуп, комиссия, логистика, реклама, налоги и чистая прибыль</div></div><div class="badge">Ручной сценарий + тарифы WB · v27</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/unit-economics">Юнит-экономика</a><a class="active" href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a class="active" href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
 <div class="hint" style="margin:0 0 16px">Это плановый калькулятор. Можно считать сценарии вручную, выбирать склад из тарифов WB или свой FBS-СЦ вручную, подтягивать фактическую логистику из продаж и сохранять расчёты в PostgreSQL. Комиссию WB пока оставь вручную или используй фактическую долю из отчётов, потому что для точной комиссии нужен предмет/категория товара.</div>
 {% if tariff_notice %}<div class="notice {{ tariff_notice.kind }}">{{ tariff_notice.text }}</div>{% endif %}
 <form method="get" class="section">
@@ -317,7 +317,7 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 SUPPLY_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Поставки · WB Profit</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Поставки</h1><div class="subtitle">Остатки FBW/FBS · скорость продаж · дата отправки поставки · рекомендуемое количество</div></div><div class="badge">Остатки: {{ as_of }}</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a class="active" href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a class="active" href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get">
 <label>Продажи с <input type="date" name="date_from" value="{{ date_from_value }}"></label>
 <label>по <input type="date" name="date_to" value="{{ date_to_value }}"></label>
@@ -352,7 +352,7 @@ SUPPLY_TEMPLATE = r"""
 LOGISTICS_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Логистика и услуги WB · {{ title }}</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Логистика и услуги WB</h1><div class="subtitle">Контроль доли удержаний WB, внешней логистики, расходов на единицу и товаров с высокой нагрузкой</div></div><div class="badge">Период: {{ type_label(selected_type) }}</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a class="active" href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a class="active" href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><select name="period_type"><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select><label>С <input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По <input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск <input name="q" placeholder="товар / артикул / nmID" value="{{ query }}"></label><label>Предупр. WB % <input inputmode="decimal" name="warn_wb" value="{{ warn_input }}"></label><label>Критично WB % <input inputmode="decimal" name="critical_wb" value="{{ critical_input }}"></label><button type="submit">Показать</button></form>
 <div class="grid"><div class="card"><div class="label">Товаров</div><div class="value">{{ totals.products }}</div></div><div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(totals.revenue) }}</div></div><div class="card"><div class="label">WB удержания и услуги</div><div class="value {{ 'bad' if totals.wb_share >= critical_wb else 'warn' if totals.wb_share >= warn_wb else '' }}">{{ money(totals.wb_services) }}</div><div class="subtitle">{{ percent(totals.wb_share) }} от дохода</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(totals.external) }}</div><div class="subtitle">{{ money(totals.external_per_unit) }} / шт.</div></div><div class="card"><div class="label">Общая нагрузка</div><div class="value {{ 'bad' if totals.burden_share >= critical_wb else 'warn' if totals.burden_share >= warn_wb else '' }}">{{ percent(totals.burden_share) }}</div><div class="subtitle">WB + внешние расходы</div></div></div>
 <div class="section two-col"><div class="card"><div class="section-head"><div><h2>Топ товаров по нагрузке WB</h2><div class="subtitle">Чем выше столбец, тем больше доля удержаний WB в доходе товара</div></div></div><div class="chart-box"><canvas id="logisticsChart"></canvas></div></div><div class="card"><h2>Как читать страницу</h2><div class="hint"><b>WB удержания и услуги</b> = доход покупателей − расчётная выплата WB. Внутри этой суммы могут быть комиссия, логистика, хранение, приёмка, штрафы и прочие удержания WB. Пока это агрегированный показатель, потому что в сохранённой базе нет полной детализации по каждому типу удержаний.</div><div class="hint"><b>Внешние расходы</b> — упаковка, фулфилмент, доставка до склада и другие расходы, которые ты заносишь в разделе «Себестоимость и расходы».</div><div class="hint">Следующий этап — добавить разбор WB-удержаний на комиссии, логистику, хранение и приёмку по строкам финансового отчёта.</div></div></div>
@@ -368,7 +368,7 @@ new Chart(document.getElementById('logisticsChart'),{type:'bar',data:{labels,dat
 SALES_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>История продаж · WB Profit</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>История продаж</h1><div class="subtitle">Построчная детализация: продажи, возвраты и отдельные расходы WB из финансового отчёта</div></div><div class="badge">{{ summary.operations }} операций</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a class="active" href="/sales">История продаж</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a class="active" href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><label>Тип данных <select name="period_type"><option value="actual" {% if selected_type == 'actual' %}selected{% endif %}>Актуально без дублей</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Только подтверждённые недели</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Только ежедневные/оперативные</option><option value="" {% if selected_type == '' %}selected{% endif %}>Все типы, могут быть дубли</option></select></label><label>С даты <input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату <input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Операция <select name="operation_type"><option value="" {% if not operation_type %}selected{% endif %}>Все</option><option value="Продажа" {% if operation_type == 'Продажа' %}selected{% endif %}>Продажи</option><option value="Возврат" {% if operation_type == 'Возврат' %}selected{% endif %}>Возвраты</option><option value="Расход WB" {% if operation_type == 'Расход WB' %}selected{% endif %}>Расходы WB</option></select></label><input name="q" value="{{ query }}" placeholder="Поиск: артикул, товар, nmID"><label><input type="checkbox" name="negative" value="1" {% if only_negative %}checked{% endif %}> только минус</label><label><input type="checkbox" name="missing_cost" value="1" {% if only_missing_cost %}checked{% endif %}> без себеса</label><button type="submit">Показать</button><a class="button secondary" href="{{ export_url }}">Экспорт CSV</a></form>{% if selected_type == 'actual' %}<div class="hint section">Режим <b>«Актуально без дублей»</b>: закрытые недели берутся из недельных отчётов, а текущая незакрытая неделя — из ежедневных отчётов после {{ date_display(actual_cutoff) if actual_cutoff else 'начала доступной истории' }}. Чтобы обновить текущие дни, запусти в Telegram <b>/syncdaily</b>.</div>{% endif %}
 {% if rows %}<div class="grid section"><div class="card"><div class="label">Операций</div><div class="value">{{ summary.operations }}</div></div><div class="card"><div class="label">Кол-во</div><div class="value">{{ units(summary.quantity) }} шт.</div></div><div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(summary.revenue) }}</div></div><div class="card"><div class="label">Расчётная выплата</div><div class="value">{{ money(summary.payout) }}</div></div><div class="card"><div class="label">WB удержания</div><div class="value">{{ money(summary.wb_expenses) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(summary.cogs) }}</div></div><div class="card"><div class="label">Реклама</div><div class="value">{{ money(summary.advertising) }}</div></div><div class="card"><div class="label">До налога</div><div class="value {{ 'good' if summary.profit_before_tax >= 0 else 'bad' }}">{{ money(summary.profit_before_tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if summary.profit >= 0 else 'bad' }}">{{ money(summary.profit) }}</div></div><div class="card"><div class="label">Маржа / ДРР</div><div class="value {{ margin_class(summary.margin) }}">{{ percent(summary.margin) }} / {{ percent(summary.drr) }}</div></div></div>
 <div class="section card"><div class="section-head"><div><h2>Операции</h2><div class="subtitle">Дата берётся из продажи/возврата WB; если WB не отдал дату — используется период отчёта</div></div><span class="muted">Показано до {{ limit }} строк</span></div><div class="table-wrap"><table style="min-width:1900px"><thead><tr><th>Дата</th><th>Операция</th><th>Товар</th><th>Артикул</th><th>nmID</th><th>Шт.</th><th>Цена/доход</th><th>Выплата WB</th><th>WB удержания</th><th>Логистика</th><th>Приёмка</th><th>Хранение</th><th>Прочие WB</th><th>Себес.</th><th>Внешние</th><th>Реклама</th><th>До налога</th><th>УСН</th><th>Чистая</th><th>Маржа</th><th>Статус</th><th>Период отчёта</th></tr></thead><tbody>{% for row in rows %}<tr><td>{{ date_display(row.operation_date or row.period_start) }}</td><td class="{{ 'profit-neg' if row.operation_type == 'Возврат' else '' }}">{{ row.operation_type }}</td><td>{{ row.name or row.sku }}</td><td class="muted">{{ row.sku }}</td><td class="muted">{{ row.nm_id or '—' }}</td><td>{{ units(row.quantity) }}</td><td>{{ money(row.revenue) }}</td><td>{{ money(row.payout) }}</td><td>{{ money(row.wb_expenses) }}</td><td>{{ money(row.logistics + row.transport) }}</td><td>{{ money(row.handling) }}</td><td>{{ money(row.storage) }}</td><td>{{ money(row.other_withholdings + row.fines) }}</td><td class="{{ 'profit-neg' if row.missing_cost else '' }}">{{ money(row.cogs) }}{% if row.missing_cost %} ⚠{% endif %}</td><td>{{ money(row.external_expenses) }}</td><td>{{ money(row.advertising) }}</td><td class="{{ 'profit-pos' if row.profit_before_tax >= 0 else 'profit-neg' }}">{{ money(row.profit_before_tax) }}</td><td>{{ money(row.tax) }}</td><td class="{{ 'profit-pos' if row.profit >= 0 else 'profit-neg' }}">{{ money(row.profit) }}</td><td>{{ percent(row.margin) }}</td><td>{% if row.period_type == 'weekly' %}<span class="rank-good">Подтверждено</span>{% elif row.period_type == 'daily' %}<span class="value warn">Оперативно</span>{% else %}<span class="muted">{{ row.period_type }}</span>{% endif %}</td><td class="muted">{{ period(row.period_start,row.period_end) }}</td></tr>{% endfor %}</tbody></table></div><div class="hint">Чтобы текущая незакрытая неделя появилась в истории, запусти в Telegram <b>/syncdaily</b>. Для загрузки ежедневных отчётов с конкретной даты используй <b>/backfilldaily ДД.ММ.ГГГГ</b>. Закрытые недели остаются финальными, дневные строки помечены как оперативные.</div></div>{% else %}<div class="card empty section">Операций пока нет. Установи v24 и запусти в Telegram <b>/backfill 01.04.2026</b>, чтобы заполнить построчную историю.</div>{% endif %}
@@ -379,7 +379,7 @@ SALES_TEMPLATE = r"""
 ADMIN_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Управление данными · WB Profit</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Себестоимость и расходы</h1><div class="subtitle">Изменения сохраняются в PostgreSQL и не пропадают после перезапуска Railway</div></div><div class="badge">{{ cost_count }} профилей · {{ expense_count }} расходов</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/unit-economics">Юнит-экономика</a><a class="active" href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a class="active" href="/admin">Себестоимость и расходы</a></nav>
 {% if ok %}<div class="notice ok">✅ {{ ok }}</div>{% endif %}{% if error %}<div class="notice error">❌ {{ error }}</div>{% endif %}
 <div class="hint" style="margin:0 0 16px">Новая цена добавляется отдельной строкой с датой начала действия. Старую строку не меняй, если цена действительно изменилась позже. Новые отчёты сразу используют эти данные; для пересчёта истории запусти в Telegram <b>/backfill ДД.ММ.ГГГГ</b>.</div>
 <section class="section admin-cols">
@@ -392,6 +392,66 @@ ADMIN_TEMPLATE = r"""
 <div class="card" id="expense-form"><h2>{{ 'Изменить расход' if edit_expense else 'Добавить внешний расход' }}</h2><div class="subtitle">Зарплата, аренда, доставка партии, дизайн и другие расходы вне отчёта WB</div><form method="post" action="/admin/expenses/save" style="margin-top:16px"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="expense_id" value="{{ edit_expense.expense_id if edit_expense else '' }}"><div class="form-grid"><div class="field"><label>Дата начала *</label><input type="date" name="period_start" required value="{{ date_input(edit_expense.period_start) if edit_expense else today }}"></div><div class="field"><label>Дата окончания *</label><input type="date" name="period_end" required value="{{ date_input(edit_expense.period_end) if edit_expense else today }}"></div></div><div class="field"><label>Категория *</label><input name="category" required value="{{ edit_expense.category if edit_expense else '' }}" placeholder="Зарплата / аренда / доставка партии"></div><div class="field"><label>Сумма, ₽ *</label><input inputmode="decimal" name="amount" required value="{{ number_input(edit_expense.amount) if edit_expense else '' }}"></div><div class="field"><label>Артикул поставщика</label><input name="sku" value="{{ edit_expense.sku if edit_expense else '' }}" placeholder="Оставь пустым для общего расхода"></div><div class="field"><label>Комментарий</label><textarea name="comment" placeholder="За что расход и к какой партии относится">{{ edit_expense.comment if edit_expense else '' }}</textarea></div><div class="form-actions"><button type="submit">{{ 'Сохранить изменения' if edit_expense else 'Добавить расход' }}</button>{% if edit_expense %}<a class="button secondary" href="/admin#expense-form">Отмена</a>{% endif %}</div></form></div>
 <div class="card"><div class="section-head"><div><h2>Внешние расходы</h2><div class="subtitle">Общий расход без артикула распределяется по товарам пропорционально доходу</div></div></div><div class="table-wrap"><table style="min-width:930px"><thead><tr><th>Категория</th><th>Период</th><th>Сумма</th><th>Артикул</th><th>Комментарий</th><th>Действия</th></tr></thead><tbody>{% for row in expenses %}<tr><td>{{ row.category }}</td><td>{{ period(row.period_start,row.period_end) }}</td><td>{{ money(row.amount) }}</td><td class="muted">{{ row.sku or 'Общий расход' }}</td><td class="muted">{{ row.comment or '—' }}</td><td><div class="inline-actions"><a class="button secondary small" href="/admin?edit_expense={{ row.expense_id }}#expense-form">Изменить</a><form method="post" action="/admin/expenses/delete" onsubmit="return confirm('Удалить этот внешний расход?')"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="expense_id" value="{{ row.expense_id }}"><button class="danger small" type="submit">Удалить</button></form></div></td></tr>{% else %}<tr><td class="empty" colspan="6">Внешних расходов пока нет.</td></tr>{% endfor %}</tbody></table></div></div></section>
 <footer>WB Profit Dashboard · редактирование защищено тем же логином и паролем</footer></div></body></html>
+"""
+
+
+RECONCILE_TEMPLATE = r"""
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Сверка · WB Profit</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
+<header><div><h1>Сверка WB и дашборда</h1><div class="subtitle">Объясняет расхождения между балансом WB, недельными отчётами, ежедневными отчётами и историей продаж</div></div><div class="badge">{{ period_label }}</div></header>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a class="active" href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
+<form class="filters" method="get"><label>С даты <input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату <input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Стартовый баланс WB, ₽ <input inputmode="decimal" name="start_balance" value="{{ start_balance_input }}" placeholder="например -25000"></label><label>Текущий баланс WB, ₽ <input inputmode="decimal" name="end_balance" value="{{ end_balance_input }}" placeholder="например 81000"></label><button type="submit">Сверить</button><a class="button secondary" href="/reconcile">Сбросить</a></form>
+
+<div class="grid section">
+  <div class="card"><div class="label">Актуальные продажи без дублей</div><div class="value">{{ units(actual_sales.quantity) }} шт.</div></div>
+  <div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(actual_summary.revenue) }}</div></div>
+  <div class="card"><div class="label">Расчётная выплата WB</div><div class="value">{{ money(actual_summary.payout) }}</div></div>
+  <div class="card"><div class="label">WB удержания</div><div class="value">{{ money(actual_summary.wb_expenses) }}</div></div>
+  <div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if actual_summary.profit >= 0 else 'bad' }}">{{ money(actual_summary.profit) }}</div></div>
+</div>
+
+<div class="section two-col">
+  <div class="card"><div class="section-head"><div><h2>Почему цифры могут расходиться</h2><div class="subtitle">Разные разделы WB считают разные события</div></div></div>
+    <div class="table-wrap"><table style="min-width:860px"><thead><tr><th>Источник</th><th>Количество</th><th>Доход</th><th>Выплата</th><th>Комментарий</th></tr></thead><tbody>
+      <tr><td>Актуально без дублей</td><td>{{ units(actual_sales.quantity) }} шт.</td><td>{{ money(actual_summary.revenue) }}</td><td>{{ money(actual_summary.payout) }}</td><td class="muted">Закрытые недели + ежедневные отчёты после последней закрытой недели</td></tr>
+      <tr><td>Только закрытые недели</td><td>{{ units(weekly_sales.quantity) }} шт.</td><td>{{ money(weekly_summary.revenue) }}</td><td>{{ money(weekly_summary.payout) }}</td><td class="muted">Финальная база для чистой прибыли</td></tr>
+      <tr><td>Только ежедневные отчёты</td><td>{{ units(daily_sales.quantity) }} шт.</td><td>{{ money(daily_summary.revenue) }}</td><td>{{ money(daily_summary.payout) }}</td><td class="muted">Оперативные данные. Могут пересекаться с закрытыми неделями</td></tr>
+      <tr><td>Оперативный хвост</td><td>{{ units(operative_tail.quantity) }} шт.</td><td>{{ money(operative_tail.revenue) }}</td><td>{{ money(operative_tail.payout) }}</td><td class="muted">Дневные данные после {{ date_display(actual_cutoff) if actual_cutoff else 'последней закрытой недели' }}</td></tr>
+    </tbody></table></div>
+    <div class="hint">Если в WB воронка показывает больше выкупов, чем дашборд, чаще всего причина — текущая неделя ещё не закрыта. Запусти в Telegram <b>/syncdaily</b> или <b>/backfilldaily ДД.ММ.ГГГГ</b>, затем выбери в истории продаж режим <b>Актуально без дублей</b>.</div>
+  </div>
+
+  <div class="card"><div class="section-head"><div><h2>От баланса к прибыли</h2><div class="subtitle">Баланс WB ≠ выручка ≠ чистая прибыль</div></div></div>
+    {% if balance_ready %}
+      <div class="summary"><span>Стартовый баланс: {{ money(start_balance) }}</span><span>Текущий баланс: {{ money(end_balance) }}</span><span>Изменение: {{ money(balance_change) }}</span></div>
+      <div class="table-wrap"><table style="min-width:650px"><tbody>
+        <tr><td>Изменение баланса WB</td><td>{{ money(balance_change) }}</td></tr>
+        <tr><td>Доход покупателей по дашборду</td><td>{{ money(actual_summary.revenue) }}</td></tr>
+        <tr><td>Расчётная выплата WB</td><td>{{ money(actual_summary.payout) }}</td></tr>
+        <tr><td>Разница “баланс − выплата”</td><td class="{{ 'profit-pos' if balance_minus_payout >= 0 else 'profit-neg' }}">{{ money(balance_minus_payout) }}</td></tr>
+        <tr><td>Чистая прибыль по дашборду</td><td class="{{ 'profit-pos' if actual_summary.profit >= 0 else 'profit-neg' }}">{{ money(actual_summary.profit) }}</td></tr>
+      </tbody></table></div>
+      <div class="hint">Разница может включать старый минус, удержания без артикула, рекламу, компенсации, корректировки, возвраты, платные услуги и операции, которые не являются продажами.</div>
+    {% else %}
+      <div class="empty">Введи стартовый и текущий баланс WB сверху, чтобы увидеть мост от изменения баланса к выплатам и прибыли.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="section grid">
+  <div class="card"><div class="label">Возвраты</div><div class="value {{ 'bad' if abs(returns.quantity) > 0 else '' }}">{{ units(abs(returns.quantity)) }} шт.</div><div class="hint">Сумма возвратов: {{ money(returns.revenue) }}</div></div>
+  <div class="card"><div class="label">Расходы WB отдельными строками</div><div class="value">{{ money(wb_cost_rows.wb_expenses) }}</div><div class="hint">Операций: {{ wb_cost_rows.operations }}</div></div>
+  <div class="card"><div class="label">Нераспределённые расходы WB</div><div class="value {{ 'warn' if abs(unallocated.wb_expenses) > 0 else '' }}">{{ money(unallocated.wb_expenses) }}</div><div class="hint">Без артикула или с артикулом “НЕРАСПРЕДЕЛЕНО”</div></div>
+  <div class="card"><div class="label">Без себестоимости</div><div class="value {{ 'bad' if actual_summary.missing_cost_count else '' }}">{{ actual_summary.missing_cost_count }}</div><div class="hint">Проверь раздел “Себестоимость и расходы”</div></div>
+  <div class="card"><div class="label">Оперативных продаж</div><div class="value">{{ units(operative_tail.quantity) }} шт.</div><div class="hint">Ещё могут измениться после закрытия недели</div></div>
+</div>
+
+<div class="section card"><div class="section-head"><div><h2>Проверка расхождений</h2><div class="subtitle">Что проверить, если WB и дашборд не совпадают</div></div></div>
+  <div class="table-wrap"><table style="min-width:900px"><thead><tr><th>Проверка</th><th>Статус</th><th>Что значит</th></tr></thead><tbody>
+    {% for item in checks %}<tr><td>{{ item.name }}</td><td class="{{ item.cls }}">{{ item.status }}</td><td class="muted">{{ item.note }}</td></tr>{% endfor %}
+  </tbody></table></div>
+  <div class="hint">Сверку лучше делать за одинаковый период. Для финальной прибыли используй закрытые недели; для текущего месяца — “Актуально без дублей”.</div>
+</div>
+<footer>WB Profit Dashboard · v29 · сверка источников данных</footer></div></body></html>
 """
 
 
@@ -1485,6 +1545,136 @@ def sales_export():
             "Content-Type": "text/csv; charset=utf-8",
             "Content-Disposition": 'attachment; filename="wb_sales_history.csv"',
         },
+    )
+
+
+@app.get("/reconcile")
+def reconcile_dashboard():
+    if not database_enabled():
+        return Response("DATABASE_URL не задан.", 503, {"Content-Type": "text/plain; charset=utf-8"})
+    date_from = _query_date("date_from")
+    date_to = _query_date("date_to")
+    if date_from and date_to and date_from > date_to:
+        date_from, date_to = date_to, date_from
+
+    actual_rows, actual_summary, actual_cutoff = _actual_sales_rows(
+        limit=5000,
+        date_from=date_from,
+        date_to=date_to,
+        query="",
+        operation_type="",
+        only_negative=False,
+        only_missing_cost=False,
+    )
+    actual_sale_rows, actual_sales, _ = _actual_sales_rows(
+        limit=5000,
+        date_from=date_from,
+        date_to=date_to,
+        query="",
+        operation_type="Продажа",
+        only_negative=False,
+        only_missing_cost=False,
+    )
+    weekly_sales = sale_operations_summary(period_type="weekly", date_from=date_from, date_to=date_to, operation_type="Продажа")
+    weekly_summary = sale_operations_summary(period_type="weekly", date_from=date_from, date_to=date_to)
+    daily_sales = sale_operations_summary(period_type="daily", date_from=date_from, date_to=date_to, operation_type="Продажа")
+    daily_summary = sale_operations_summary(period_type="daily", date_from=date_from, date_to=date_to)
+    returns = sale_operations_summary(period_type=None, date_from=date_from, date_to=date_to, operation_type="Возврат")
+    wb_cost_rows = sale_operations_summary(period_type=None, date_from=date_from, date_to=date_to, operation_type="Расход WB")
+
+    operative_tail = SimpleNamespace(quantity=0.0, revenue=0.0, payout=0.0)
+    if actual_cutoff is not None:
+        tail = sale_operations_summary(period_type="daily", date_from=actual_cutoff + timedelta(days=1), date_to=date_to, operation_type="Продажа")
+        operative_tail = tail
+
+    unallocated_rows = []
+    for row in actual_rows:
+        sku = str(getattr(row, "sku", "") or "").casefold()
+        name = str(getattr(row, "name", "") or "").casefold()
+        nm_id = getattr(row, "nm_id", None)
+        if "нераспредел" in sku or "нераспредел" in name or not nm_id:
+            unallocated_rows.append(row)
+    unallocated = _summarize_sale_rows(unallocated_rows)
+
+    start_balance_raw = request.args.get("start_balance", "").strip()
+    end_balance_raw = request.args.get("end_balance", "").strip()
+    start_balance = _query_float("start_balance", 0.0) if start_balance_raw else None
+    end_balance = _query_float("end_balance", 0.0) if end_balance_raw else None
+    balance_ready = start_balance is not None and end_balance is not None
+    balance_change = (float(end_balance) - float(start_balance)) if balance_ready else 0.0
+    balance_minus_payout = balance_change - float(actual_summary.payout or 0.0)
+
+    checks = []
+    def add_check(name: str, ok: bool, warning: bool, note: str):
+        if ok:
+            status, cls = "Ок", "profit-pos"
+        elif warning:
+            status, cls = "Проверить", "value warn"
+        else:
+            status, cls = "Проблема", "profit-neg"
+        checks.append({"name": name, "status": status, "cls": cls, "note": note})
+
+    add_check(
+        "Текущая неделя догружена ежедневными отчётами",
+        abs(float(operative_tail.quantity or 0.0)) > 0 or actual_cutoff is None,
+        True,
+        "Если в WB есть свежие выкупы, а тут 0 — запусти /syncdaily.",
+    )
+    add_check(
+        "Есть расходы WB без артикула",
+        abs(float(unallocated.wb_expenses or 0.0)) < 0.01,
+        True,
+        "Нераспределённые расходы не всегда можно разнести по SKU автоматически.",
+    )
+    add_check(
+        "Все продажи имеют себестоимость",
+        int(actual_summary.missing_cost_count or 0) == 0,
+        False,
+        "Если есть пропуски, прибыль завышена. Добавь себестоимость товара.",
+    )
+    add_check(
+        "Возвраты учтены",
+        True,
+        False,
+        f"Возвраты за период: {abs(float(returns.quantity or 0.0)):.0f} шт. Они уменьшают итоговую прибыль.",
+    )
+    if balance_ready:
+        add_check(
+            "Баланс WB сравнен с выплатами",
+            abs(balance_minus_payout) < max(1000.0, abs(float(actual_summary.payout or 0.0)) * 0.15),
+            True,
+            "Большая разница не всегда ошибка: баланс включает старый минус, удержания, рекламу, корректировки и переносы.",
+        )
+
+    period_label = "Период: " + ((date_from.strftime("%d.%m.%Y") if date_from else "начало") + " — " + (date_to.strftime("%d.%m.%Y") if date_to else "сегодня"))
+    return render_template_string(
+        RECONCILE_TEMPLATE,
+        period_label=period_label,
+        date_from_value=date_from.isoformat() if date_from else "",
+        date_to_value=date_to.isoformat() if date_to else "",
+        start_balance_input=start_balance_raw,
+        end_balance_input=end_balance_raw,
+        start_balance=start_balance or 0.0,
+        end_balance=end_balance or 0.0,
+        balance_ready=balance_ready,
+        balance_change=balance_change,
+        balance_minus_payout=balance_minus_payout,
+        actual_summary=actual_summary,
+        actual_sales=actual_sales,
+        weekly_summary=weekly_summary,
+        weekly_sales=weekly_sales,
+        daily_summary=daily_summary,
+        daily_sales=daily_sales,
+        operative_tail=operative_tail,
+        returns=returns,
+        wb_cost_rows=wb_cost_rows,
+        unallocated=unallocated,
+        actual_cutoff=actual_cutoff,
+        checks=checks,
+        money=_money,
+        percent=_percent,
+        units=_units,
+        date_display=_date_display,
     )
 
 
