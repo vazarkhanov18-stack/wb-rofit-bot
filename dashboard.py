@@ -1675,6 +1675,7 @@ def reconcile_dashboard():
         percent=_percent,
         units=_units,
         date_display=_date_display,
+        abs=abs,
     )
 
 
