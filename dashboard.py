@@ -2074,6 +2074,7 @@ def logistics():
         detail_totals=SimpleNamespace(**detail_totals),
         detail_breakdown=detail_breakdown,
         detail_rows=detail_rows,
+        abs=abs,
         money=_money,
         percent=_percent,
         units=_units,
