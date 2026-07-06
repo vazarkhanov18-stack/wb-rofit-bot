@@ -355,9 +355,16 @@ LOGISTICS_TEMPLATE = r"""
 <nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a class="active" href="/logistics">Логистика</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><select name="period_type"><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select><label>С <input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По <input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск <input name="q" placeholder="товар / артикул / nmID" value="{{ query }}"></label><label>Предупр. WB % <input inputmode="decimal" name="warn_wb" value="{{ warn_input }}"></label><label>Критично WB % <input inputmode="decimal" name="critical_wb" value="{{ critical_input }}"></label><button type="submit">Показать</button></form>
 <div class="grid"><div class="card"><div class="label">Товаров</div><div class="value">{{ totals.products }}</div></div><div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(totals.revenue) }}</div></div><div class="card"><div class="label">WB удержания и услуги</div><div class="value {{ 'bad' if totals.wb_share >= critical_wb else 'warn' if totals.wb_share >= warn_wb else '' }}">{{ money(totals.wb_services) }}</div><div class="subtitle">{{ percent(totals.wb_share) }} от дохода</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(totals.external) }}</div><div class="subtitle">{{ money(totals.external_per_unit) }} / шт.</div></div><div class="card"><div class="label">Общая нагрузка</div><div class="value {{ 'bad' if totals.burden_share >= critical_wb else 'warn' if totals.burden_share >= warn_wb else '' }}">{{ percent(totals.burden_share) }}</div><div class="subtitle">WB + внешние расходы</div></div></div>
-<div class="section two-col"><div class="card"><div class="section-head"><div><h2>Топ товаров по нагрузке WB</h2><div class="subtitle">Чем выше столбец, тем больше доля удержаний WB в доходе товара</div></div></div><div class="chart-box"><canvas id="logisticsChart"></canvas></div></div><div class="card"><h2>Как читать страницу</h2><div class="hint"><b>WB удержания и услуги</b> = доход покупателей − расчётная выплата WB. Внутри этой суммы могут быть комиссия, логистика, хранение, приёмка, штрафы и прочие удержания WB. Пока это агрегированный показатель, потому что в сохранённой базе нет полной детализации по каждому типу удержаний.</div><div class="hint"><b>Внешние расходы</b> — упаковка, фулфилмент, доставка до склада и другие расходы, которые ты заносишь в разделе «Себестоимость и расходы».</div><div class="hint">Следующий этап — добавить разбор WB-удержаний на комиссии, логистику, хранение и приёмку по строкам финансового отчёта.</div></div></div>
+
+<div class="section card"><div class="section-head"><div><h2>Детализация удержаний WB</h2><div class="subtitle">Разбор строк финансового отчёта: логистика, приёмка, хранение, штрафы и прочие удержания</div></div><span class="muted">Операций: {{ detail_totals.operations|int }}</span></div>
+  <div class="grid" style="margin-bottom:14px"><div class="card"><div class="label">Логистика WB</div><div class="value">{{ money(detail_totals.logistics_total) }}</div></div><div class="card"><div class="label">Приёмка</div><div class="value">{{ money(detail_totals.handling) }}</div></div><div class="card"><div class="label">Хранение</div><div class="value">{{ money(detail_totals.storage) }}</div></div><div class="card"><div class="label">Штрафы</div><div class="value {{ 'bad' if detail_totals.fines else '' }}">{{ money(detail_totals.fines) }}</div></div><div class="card"><div class="label">Неразложенная часть</div><div class="value {{ 'warn' if abs(detail_totals.unallocated) > 1 else '' }}">{{ money(detail_totals.unallocated) }}</div></div></div>
+  <div class="two-col"><div class="table-wrap"><table style="min-width:760px"><thead><tr><th>Статья</th><th>Сумма</th><th>Доля от дохода</th><th>Комментарий</th></tr></thead><tbody>{% for row in detail_breakdown %}<tr><td>{{ row.name }}</td><td class="{{ 'profit-neg' if row.amount < 0 else '' }}">{{ money(row.amount) }}</td><td>{{ percent(row.share) }}</td><td class="muted">{{ row.hint }}</td></tr>{% endfor %}</tbody></table></div><div><div class="hint"><b>Общие WB удержания</b> считаются как доход покупателей − расчётная выплата WB. Ниже мы раскладываем их по строкам фин. отчёта. Если есть “неразложенная часть”, значит WB отдал удержания, которые не удалось точно отнести к логистике, приёмке, хранению или штрафам.</div><div class="hint">Для максимально точной детализации обнови историю через <b>/backfill ДД.ММ.ГГГГ</b> после установки этого обновления.</div></div></div>
+</div>
+<div class="section two-col"><div class="card"><div class="section-head"><div><h2>Топ товаров по нагрузке WB</h2><div class="subtitle">Чем выше столбец, тем больше доля удержаний WB в доходе товара</div></div></div><div class="chart-box"><canvas id="logisticsChart"></canvas></div></div><div class="card"><h2>Как читать страницу</h2><div class="hint"><b>WB удержания и услуги</b> = доход покупателей − расчётная выплата WB. Внутри этой суммы могут быть комиссия, логистика, хранение, приёмка, штрафы и прочие удержания WB. Общая сумма нужна для сверки. Детальная расшифровка по строкам финансового отчёта показана ниже: логистика, приёмка, хранение, штрафы и прочие удержания.</div><div class="hint"><b>Внешние расходы</b> — упаковка, фулфилмент, доставка до склада и другие расходы, которые ты заносишь в разделе «Себестоимость и расходы».</div><div class="hint">Если часть расходов отображается как “неразложенная”, её лучше сверять в истории продаж и финансовом отчёте WB.</div></div></div>
 <div class="section card"><div class="section-head"><div><h2>Товары</h2><div class="subtitle">Сортировка: сначала самая высокая нагрузка WB</div></div><span class="muted">{{ period_label }}</span></div><div class="table-wrap"><table><thead><tr><th>Товар</th><th>Артикул</th><th>Шт.</th><th>Доход</th><th>Выплата WB</th><th>WB удержания</th><th>WB / шт.</th><th>WB %</th><th>Внешние</th><th>Внешн. / шт.</th><th>Общая нагрузка</th><th>Прибыль</th><th>Маржа</th><th>Статус</th></tr></thead><tbody>{% for row in rows %}<tr><td>{{ row.name or row.sku }}</td><td class="muted">{{ row.sku }}</td><td>{{ units(row.units) }}</td><td>{{ money(row.revenue) }}</td><td>{{ money(row.payout) }}</td><td>{{ money(row.wb_services) }}</td><td>{{ money(row.wb_per_unit) }}</td><td class="{{ row.status_class }}">{{ percent(row.wb_share) }}</td><td>{{ money(row.external) }}</td><td>{{ money(row.external_per_unit) }}</td><td>{{ percent(row.burden_share) }}</td><td class="{{ 'profit-pos' if row.profit >= 0 else 'profit-neg' }}">{{ money(row.profit) }}</td><td>{{ percent(row.margin) }}</td><td class="{{ row.status_class }}">{{ row.status }}</td></tr>{% else %}<tr><td colspan="14" class="empty">Нет данных за выбранный период.</td></tr>{% endfor %}</tbody></table></div></div>
-<footer>WB Profit Dashboard · v23 · логистика и удержания WB</footer></div>
+
+<div class="section card"><div class="section-head"><div><h2>Детализация по товарам</h2><div class="subtitle">По строкам истории продаж и расходов WB. Сортировка — по сумме удержаний WB.</div></div></div><div class="table-wrap"><table style="min-width:1350px"><thead><tr><th>Товар</th><th>Артикул</th><th>nmID</th><th>Шт.</th><th>Доход</th><th>WB удержания</th><th>Логистика</th><th>Лог. / шт.</th><th>Приёмка</th><th>Приёмка / шт.</th><th>Хранение</th><th>Штрафы</th><th>Прочие WB</th><th>Неразложено</th></tr></thead><tbody>{% for row in detail_rows %}<tr><td>{{ row.name }}</td><td class="muted">{{ row.sku }}</td><td class="muted">{{ row.nm_id or '—' }}</td><td>{{ units(row.quantity) }}</td><td>{{ money(row.revenue) }}</td><td>{{ money(row.wb_expenses) }}</td><td>{{ money(row.logistics_total) }}</td><td>{{ money(row.logistics_per_unit) }}</td><td>{{ money(row.handling) }}</td><td>{{ money(row.handling_per_unit) }}</td><td>{{ money(row.storage) }}</td><td class="{{ 'profit-neg' if row.fines else '' }}">{{ money(row.fines) }}</td><td>{{ money(row.other) }}</td><td class="{{ 'warn' if abs(row.unallocated) > 1 else '' }}">{{ money(row.unallocated) }}</td></tr>{% else %}<tr><td colspan="14" class="empty">Детализация по операциям пока не найдена. Запусти /backfill, чтобы сохранить историю продаж.</td></tr>{% endfor %}</tbody></table></div></div>
+<footer>WB Profit Dashboard · v30 · детализация логистики и удержаний WB</footer></div>
 <script>
 const labels={{ chart_labels|tojson }}; const wb={{ chart_wb|tojson }}; const external={{ chart_external|tojson }};
 new Chart(document.getElementById('logisticsChart'),{type:'bar',data:{labels,datasets:[{label:'WB %',data:wb},{label:'Внешние %',data:external}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#f5f7fb'}}},scales:{x:{ticks:{color:'#9aa3b5',maxRotation:35,minRotation:0},grid:{color:'rgba(255,255,255,.05)'}},y:{ticks:{color:'#9aa3b5',callback:v=>v+'%'},grid:{color:'rgba(255,255,255,.06)'}}}}});
@@ -739,6 +746,127 @@ def _logistics_row(row, *, warn_wb: float, critical_wb: float) -> dict[str, Any]
         "status": status,
         "status_class": status_class,
     }
+
+
+
+
+
+def _sale_op_amount(row: Any, field: str) -> float:
+    try:
+        return float(getattr(row, field, 0) or 0)
+    except Exception:
+        return 0.0
+
+
+def _operation_logistics_details(rows: list[Any]) -> tuple[dict[str, float], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Aggregate detailed WB deductions from saved sale operations.
+
+    Weekly product summaries only contain total payout/revenue. Sale operations keep a
+    more granular split: logistics, transport, handling, storage, fines and other WB
+    withholdings. This helper makes the logistics page explain what exactly sits inside
+    the aggregated WB deductions.
+    """
+    totals = {
+        "operations": float(len(rows)),
+        "quantity": 0.0,
+        "revenue": 0.0,
+        "payout": 0.0,
+        "wb_expenses": 0.0,
+        "logistics": 0.0,
+        "transport": 0.0,
+        "logistics_total": 0.0,
+        "handling": 0.0,
+        "storage": 0.0,
+        "fines": 0.0,
+        "other": 0.0,
+        "detailed_total": 0.0,
+        "unallocated": 0.0,
+        "expense_rows": 0.0,
+        "sale_rows": 0.0,
+        "return_rows": 0.0,
+    }
+    by_sku: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        op = str(getattr(row, "operation_type", "") or "")
+        sku = str(getattr(row, "sku", "") or "НЕРАСПРЕДЕЛЕНО")
+        name = str(getattr(row, "name", "") or sku)
+        nm_id = getattr(row, "nm_id", None)
+        qty = _sale_op_amount(row, "quantity")
+        revenue = _sale_op_amount(row, "revenue")
+        payout = _sale_op_amount(row, "payout")
+        wb_expenses = _sale_op_amount(row, "wb_expenses")
+        logistics = _sale_op_amount(row, "logistics")
+        transport = _sale_op_amount(row, "transport")
+        logistics_total = logistics + transport
+        handling = _sale_op_amount(row, "handling")
+        storage = _sale_op_amount(row, "storage")
+        fines = _sale_op_amount(row, "fines")
+        other = _sale_op_amount(row, "other_withholdings")
+        detailed = logistics_total + handling + storage + fines + other
+
+        totals["quantity"] += qty
+        totals["revenue"] += revenue
+        totals["payout"] += payout
+        totals["wb_expenses"] += wb_expenses
+        totals["logistics"] += logistics
+        totals["transport"] += transport
+        totals["logistics_total"] += logistics_total
+        totals["handling"] += handling
+        totals["storage"] += storage
+        totals["fines"] += fines
+        totals["other"] += other
+        totals["detailed_total"] += detailed
+        if op == "Расход WB":
+            totals["expense_rows"] += 1
+        elif op == "Продажа":
+            totals["sale_rows"] += 1
+        elif op == "Возврат":
+            totals["return_rows"] += 1
+
+        item = by_sku.setdefault(sku, {
+            "sku": sku,
+            "name": name,
+            "nm_id": nm_id,
+            "quantity": 0.0,
+            "revenue": 0.0,
+            "wb_expenses": 0.0,
+            "logistics_total": 0.0,
+            "handling": 0.0,
+            "storage": 0.0,
+            "fines": 0.0,
+            "other": 0.0,
+            "detailed_total": 0.0,
+            "unallocated": 0.0,
+        })
+        item["quantity"] += qty
+        item["revenue"] += revenue
+        item["wb_expenses"] += wb_expenses
+        item["logistics_total"] += logistics_total
+        item["handling"] += handling
+        item["storage"] += storage
+        item["fines"] += fines
+        item["other"] += other
+        item["detailed_total"] += detailed
+        item["name"] = name or item["name"]
+        item["nm_id"] = nm_id or item["nm_id"]
+
+    totals["unallocated"] = totals["wb_expenses"] - totals["detailed_total"]
+    breakdown = [
+        {"name": "Логистика WB", "amount": totals["logistics_total"], "share": _div(totals["logistics_total"], totals["revenue"]), "hint": "Доставка, обратная логистика и транспортные строки из фин. отчёта"},
+        {"name": "Приёмка", "amount": totals["handling"], "share": _div(totals["handling"], totals["revenue"]), "hint": "Платная приёмка и обработка"},
+        {"name": "Хранение", "amount": totals["storage"], "share": _div(totals["storage"], totals["revenue"]), "hint": "Хранение на складах WB"},
+        {"name": "Штрафы", "amount": totals["fines"], "share": _div(totals["fines"], totals["revenue"]), "hint": "Штрафы и санкции WB"},
+        {"name": "Прочие WB", "amount": totals["other"], "share": _div(totals["other"], totals["revenue"]), "hint": "Удержания, которые не попали в логистику/приёмку/хранение"},
+        {"name": "Неразложенная часть", "amount": totals["unallocated"], "share": _div(totals["unallocated"], totals["revenue"]), "hint": "Разница между общими WB удержаниями и распознанными статьями"},
+    ]
+    for item in by_sku.values():
+        item["unallocated"] = item["wb_expenses"] - item["detailed_total"]
+        item["wb_share"] = _div(item["wb_expenses"], item["revenue"])
+        item["logistics_per_unit"] = _div(item["logistics_total"], item["quantity"])
+        item["handling_per_unit"] = _div(item["handling"], item["quantity"])
+        item["storage_per_unit"] = _div(item["storage"], item["quantity"])
+    sku_rows = sorted(by_sku.values(), key=lambda x: (abs(float(x.get("wb_expenses") or 0)), abs(float(x.get("logistics_total") or 0))), reverse=True)[:50]
+    return totals, breakdown, sku_rows
 
 
 def _query_int(name: str, default: int, *, minimum: int = 1, maximum: int = 365) -> int:
@@ -1895,6 +2023,14 @@ def logistics():
     )
     rows = [_logistics_row(row, warn_wb=warn_wb, critical_wb=critical_wb) for row in source_rows if abs(float(row.revenue or 0)) > 0.000001 or abs(float(row.units or 0)) > 0.000001]
     rows.sort(key=lambda r: (r["burden_share"], r["wb_share"], r["revenue"]), reverse=True)
+    op_rows = list_sale_operations(
+        5000,
+        period_type=selected_type,
+        date_from=date_from,
+        date_to=date_to,
+        query=query,
+    )
+    detail_totals, detail_breakdown, detail_rows = _operation_logistics_details(list(op_rows))
     total_revenue = sum(r["revenue"] for r in rows)
     total_units = sum(r["units"] for r in rows)
     total_wb = sum(r["wb_services"] for r in rows)
@@ -1935,6 +2071,9 @@ def logistics():
         chart_labels=[(r["name"] or r["sku"] or "—")[:28] for r in chart_rows],
         chart_wb=[round(r["wb_share"] * 100, 2) for r in chart_rows],
         chart_external=[round(r["external_share"] * 100, 2) for r in chart_rows],
+        detail_totals=SimpleNamespace(**detail_totals),
+        detail_breakdown=detail_breakdown,
+        detail_rows=detail_rows,
         money=_money,
         percent=_percent,
         units=_units,
