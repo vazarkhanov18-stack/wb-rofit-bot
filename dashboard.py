@@ -76,7 +76,7 @@ DASHBOARD_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>{{ title }}</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>{{ title }}</h1><div class="subtitle">Финансы Wildberries · история себестоимости · внешний P&amp;L</div></div><div class="badge">Последнее сохранение: {{ latest_created }}</div></header>
 <nav class="nav"><a class="active" href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
-<form class="filters" method="get"><select name="period_type" aria-label="Тип периода"><option value="" {% if not selected_type %}selected{% endif %}>Все сохранённые периоды</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Загруженные Excel</option></select><select name="expense_base" aria-label="База процентов"><option value="revenue" {% if expense_base == 'revenue' %}selected{% endif %}>Расходы: % от выручки</option><option value="expenses" {% if expense_base == 'expenses' %}selected{% endif %}>Расходы: % от всех расходов</option></select><button type="submit">Показать</button></form>
+<form class="filters" method="get"><select name="period_type" aria-label="Тип периода"><option value="actual" {% if selected_type == 'actual' %}selected{% endif %}>Актуально без дублей</option><option value="" {% if selected_type == '' %}selected{% endif %}>Все сохранённые периоды</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Загруженные Excel</option></select><label>С даты <input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату <input type="date" name="date_to" value="{{ date_to_value }}"></label><select name="expense_base" aria-label="База процентов"><option value="revenue" {% if expense_base == 'revenue' %}selected{% endif %}>Расходы: % от выручки</option><option value="expenses" {% if expense_base == 'expenses' %}selected{% endif %}>Расходы: % от всех расходов</option></select><button type="submit">Показать</button><a class="button secondary" href="/?period_type=actual">С первой продажи по сейчас</a></form>{% if selected_type == 'actual' %}<div class="hint">Режим <b>«Актуально без дублей»</b>: закрытые недели берутся из недельных отчётов, а текущая незакрытая неделя — из ежедневных отчётов. Если не выбрать даты, дашборд показывает период от первой сохранённой продажи до текущего дня. Для свежих дней запусти в Telegram <b>/syncdaily</b>.</div>{% endif %}
 {% if latest %}<div class="grid">
 <div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(latest.revenue) }}</div></div><div class="card"><div class="label">Расчётная выплата</div><div class="value">{{ money(latest.payout) }}</div></div><div class="card"><div class="label">Прибыль до налога</div><div class="value {{ 'good' if latest.profit_before_tax >= 0 else 'bad' }}">{{ money(latest.profit_before_tax) }}</div></div><div class="card"><div class="label">УСН 6%</div><div class="value">{{ money(latest.tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if latest.profit >= 0 else 'bad' }}">{{ money(latest.profit) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(latest.cogs) }}</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(latest.external_expenses) }}</div></div><div class="card"><div class="label">Реклама WB</div><div class="value">{{ money(latest.advertising) }}</div></div><div class="card"><div class="label">ДРР / Маржа</div><div class="value {{ margin_class(latest.margin) }}">{{ percent(latest.drr) }} / {{ percent(latest.margin) }}</div></div><div class="card"><div class="label">Продано</div><div class="value">{{ units(latest.units) }} шт.</div></div></div>
 
@@ -1589,54 +1589,172 @@ PLAN_FACT_TEMPLATE = r"""
 </div></body></html>
 """
 
+
+
+def _report_from_sales_summary(summary: Any, *, date_from: date | None, date_to: date | None) -> SimpleNamespace:
+    """Build a report-like object from sale operation rows for the main dashboard."""
+    return SimpleNamespace(
+        report_id=0,
+        period_type="actual",
+        period_start=date_from or date(1900, 1, 1),
+        period_end=date_to or date.today(),
+        revenue=float(getattr(summary, "revenue", 0.0) or 0.0),
+        payout=float(getattr(summary, "payout", 0.0) or 0.0),
+        wb_expenses=float(getattr(summary, "wb_expenses", 0.0) or 0.0),
+        cogs=float(getattr(summary, "cogs", 0.0) or 0.0),
+        external_expenses=float(getattr(summary, "external_expenses", 0.0) or 0.0),
+        advertising=float(getattr(summary, "advertising", 0.0) or 0.0),
+        profit_before_tax=float(getattr(summary, "profit_before_tax", 0.0) or 0.0),
+        tax=float(getattr(summary, "tax", 0.0) or 0.0),
+        profit=float(getattr(summary, "profit", 0.0) or 0.0),
+        margin=float(getattr(summary, "margin", 0.0) or 0.0),
+        drr=float(getattr(summary, "drr", 0.0) or 0.0),
+        units=float(getattr(summary, "quantity", 0.0) or 0.0),
+        created_at=datetime.now(),
+    )
+
+
+def _sku_summary_from_sales(rows: list[Any]) -> list[SimpleNamespace]:
+    by_sku: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        sku = str(getattr(row, "sku", "") or "НЕРАСПРЕДЕЛЕНО")
+        item = by_sku.setdefault(sku, {
+            "sku": sku,
+            "name": getattr(row, "name", "") or sku,
+            "units": 0.0,
+            "revenue": 0.0,
+            "cogs": 0.0,
+            "external_expenses": 0.0,
+            "advertising": 0.0,
+            "profit_before_tax": 0.0,
+            "tax": 0.0,
+            "profit": 0.0,
+        })
+        if not item.get("name") or item.get("name") == sku:
+            item["name"] = getattr(row, "name", "") or sku
+        item["units"] += float(getattr(row, "quantity", 0.0) or 0.0)
+        item["revenue"] += float(getattr(row, "revenue", 0.0) or 0.0)
+        item["cogs"] += float(getattr(row, "cogs", 0.0) or 0.0)
+        item["external_expenses"] += float(getattr(row, "external_expenses", 0.0) or 0.0)
+        item["advertising"] += float(getattr(row, "advertising", 0.0) or 0.0)
+        item["profit_before_tax"] += float(getattr(row, "profit_before_tax", 0.0) or 0.0)
+        item["tax"] += float(getattr(row, "tax", 0.0) or 0.0)
+        item["profit"] += float(getattr(row, "profit", 0.0) or 0.0)
+    out: list[SimpleNamespace] = []
+    for item in by_sku.values():
+        revenue = float(item["revenue"] or 0.0)
+        item["margin"] = float(item["profit"] or 0.0) / revenue if abs(revenue) > 0.000001 else 0.0
+        out.append(SimpleNamespace(**item))
+    out.sort(key=lambda x: float(x.profit or 0.0), reverse=True)
+    return out
+
+
+def _chart_from_sale_rows(rows: list[Any]) -> tuple[list[str], list[float], list[float], list[float]]:
+    grouped: dict[tuple[date, date], dict[str, float]] = {}
+    for row in rows:
+        start = getattr(row, "period_start", None) or getattr(row, "operation_date", None) or date.today()
+        end = getattr(row, "period_end", None) or start
+        key = (start, end)
+        item = grouped.setdefault(key, {"revenue": 0.0, "profit": 0.0, "pre_tax": 0.0})
+        item["revenue"] += float(getattr(row, "revenue", 0.0) or 0.0)
+        item["profit"] += float(getattr(row, "profit", 0.0) or 0.0)
+        item["pre_tax"] += float(getattr(row, "profit_before_tax", 0.0) or 0.0)
+    items = sorted(grouped.items(), key=lambda kv: kv[0])
+    return (
+        [_period(start, end) for (start, end), _v in items],
+        [round(v["profit"], 2) for _k, v in items],
+        [round(v["pre_tax"], 2) for _k, v in items],
+        [round(v["revenue"], 2) for _k, v in items],
+    )
+
 @app.get("/")
 def dashboard():
     if not database_enabled():
         return Response("DATABASE_URL не задан. Сначала подключи PostgreSQL к сервису бота.", 503, {"Content-Type": "text/plain; charset=utf-8"})
-    selected_type = request.args.get("period_type", "").strip()
-    if selected_type not in {"", "daily", "weekly", "xlsx"}:
-        selected_type = ""
+    selected_type = request.args.get("period_type", "actual").strip()
+    if selected_type not in {"actual", "", "daily", "weekly", "xlsx"}:
+        selected_type = "actual"
     expense_base = request.args.get("expense_base", "revenue").strip()
     if expense_base not in {"revenue", "expenses"}:
         expense_base = "revenue"
-    reports_desc = list_dashboard_reports(200, period_type=selected_type or None)
-    latest = reports_desc[0] if reports_desc else None
-    selected_report_id = request.args.get("report_id", "").strip()
-    if selected_report_id.isdigit():
-        candidate = get_dashboard_report(int(selected_report_id))
-        if candidate is not None and (not selected_type or candidate.period_type == selected_type):
-            latest = candidate
-    skus = list_dashboard_skus(latest.report_id) if latest else []
-    expense_rows = []
-    if latest:
-        try:
-            expense_rows = list_sale_operations(
-                limit=5000,
-                period_type=latest.period_type,
-                date_from=latest.period_start,
-                date_to=latest.period_end,
-                query="",
-                operation_type="",
-            )
-        except Exception:
-            logger.exception("Could not load operations for expense structure")
-            expense_rows = []
+    date_from = _query_date("date_from")
+    date_to = _query_date("date_to") or date.today()
+    if date_from and date_to and date_from > date_to:
+        date_from, date_to = date_to, date_from
+
+    reports_desc = list_dashboard_reports(200, period_type=None if selected_type == "actual" else (selected_type or None))
+    latest = None
+    skus: list[Any] = []
+    expense_rows: list[Any] = []
+    chart_labels: list[str] = []
+    chart_profit: list[float] = []
+    chart_pre_tax: list[float] = []
+    chart_revenue: list[float] = []
+    latest_period = ""
+    latest_created = "ещё нет"
+
+    if selected_type == "actual":
+        actual_rows, summary, _cutoff = _actual_sales_rows(
+            limit=20000,
+            date_from=date_from,
+            date_to=date_to,
+            query="",
+            operation_type="",
+            only_negative=False,
+            only_missing_cost=False,
+        )
+        latest = _report_from_sales_summary(summary, date_from=date_from, date_to=date_to)
+        skus = _sku_summary_from_sales(actual_rows)
+        expense_rows = actual_rows
+        chart_labels, chart_profit, chart_pre_tax, chart_revenue = _chart_from_sale_rows(actual_rows)
+        latest_period = (f"с первой продажи по {_date_display(date_to)}" if not date_from else _period(date_from, date_to))
+        latest_created = "актуально без дублей"
+    else:
+        latest = reports_desc[0] if reports_desc else None
+        selected_report_id = request.args.get("report_id", "").strip()
+        if selected_report_id.isdigit():
+            candidate = get_dashboard_report(int(selected_report_id))
+            if candidate is not None and (not selected_type or candidate.period_type == selected_type):
+                latest = candidate
+        skus = list_dashboard_skus(latest.report_id) if latest else []
+        if latest:
+            try:
+                expense_rows = list_sale_operations(
+                    limit=5000,
+                    period_type=latest.period_type,
+                    date_from=latest.period_start,
+                    date_to=latest.period_end,
+                    query="",
+                    operation_type="",
+                )
+            except Exception:
+                logger.exception("Could not load operations for expense structure")
+                expense_rows = []
+        reports_asc = list(reversed(reports_desc))
+        chart_labels = [_period(r.period_start, r.period_end) for r in reports_asc]
+        chart_profit = [round(r.profit, 2) for r in reports_asc]
+        chart_pre_tax = [round(r.profit_before_tax, 2) for r in reports_asc]
+        chart_revenue = [round(r.revenue, 2) for r in reports_asc]
+        latest_created = latest.created_at.strftime("%d.%m.%Y %H:%M") if latest else "ещё нет"
+        latest_period = _period(latest.period_start, latest.period_end) if latest else ""
+
     expense_structure = _build_expense_structure(latest, expense_rows, base=expense_base)
-    reports_asc = list(reversed(reports_desc))
     context: dict[str, Any] = {
         "title": os.getenv("DASHBOARD_TITLE", "WB Profit Dashboard").strip() or "WB Profit Dashboard",
         "latest": latest,
         "skus": skus,
         "reports_desc": reports_desc,
         "selected_type": selected_type,
+        "date_from_value": date_from.isoformat() if date_from else "",
+        "date_to_value": date_to.isoformat() if date_to else "",
         "expense_base": expense_base,
         "expense_structure": expense_structure,
-        "chart_labels": [_period(r.period_start, r.period_end) for r in reports_asc],
-        "chart_profit": [round(r.profit, 2) for r in reports_asc],
-        "chart_pre_tax": [round(r.profit_before_tax, 2) for r in reports_asc],
-        "chart_revenue": [round(r.revenue, 2) for r in reports_asc],
-        "latest_created": latest.created_at.strftime("%d.%m.%Y %H:%M") if latest else "ещё нет",
-        "latest_period": _period(latest.period_start, latest.period_end) if latest else "",
+        "chart_labels": chart_labels,
+        "chart_profit": chart_profit,
+        "chart_pre_tax": chart_pre_tax,
+        "chart_revenue": chart_revenue,
+        "latest_created": latest_created,
+        "latest_period": latest_period,
         "money": _money,
         "percent": _percent,
         "units": _units,
