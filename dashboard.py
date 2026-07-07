@@ -68,6 +68,9 @@ BASE_STYLE = r"""
 .grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}.card{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.015));border:1px solid var(--line);border-radius:18px;padding:17px;min-width:0}.label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}.value{margin-top:9px;font-size:clamp(19px,2.3vw,29px);font-weight:800;letter-spacing:-.035em;overflow-wrap:anywhere}.value.good{color:var(--good)}.value.bad{color:var(--bad)}.value.warn{color:var(--warn)}.section{margin-top:16px}.section-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}h2{margin:0;font-size:20px}h3{margin:0 0 12px;font-size:17px}.chart-box{height:360px}.two-col{display:grid;grid-template-columns:1.35fr .65fr;gap:16px}.admin-cols{display:grid;grid-template-columns:minmax(310px,.72fr) minmax(0,1.28fr);gap:16px}.table-wrap{overflow:auto;border-radius:14px}
 table{width:100%;border-collapse:collapse;min-width:1050px}th,td{padding:11px 10px;border-bottom:1px solid var(--line);text-align:right;font-size:12.5px;white-space:nowrap}th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--panel)}th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}tr:last-child td{border-bottom:0}.profit-pos{color:var(--good);font-weight:700}.profit-neg{color:var(--bad);font-weight:700}.muted{color:var(--muted)}.empty{padding:40px 20px;text-align:center;color:var(--muted)}.period-link,.text-link{color:var(--text);text-decoration:none;font-weight:650}.period-link:hover,.text-link:hover{color:#d6a7ff}.hint{margin-top:12px;padding:12px 14px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:12px;line-height:1.5}.notice{margin-bottom:14px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);font-size:13px}.notice.ok{background:rgba(61,220,151,.10);border-color:rgba(61,220,151,.28);color:#9af0c9}.notice.error{background:rgba(255,102,120,.10);border-color:rgba(255,102,120,.28);color:#ffadb7}.field{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}.field label{color:var(--muted);font-size:12px}.field input,.field textarea,.field select{width:100%}.form-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}.inline-actions{display:flex;gap:7px;justify-content:flex-end}.inline-actions form{margin:0}.small{font-size:11px;padding:7px 9px;border-radius:9px}.summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}.summary span{padding:8px 11px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--muted);font-size:12px}.expense-bars{display:grid;gap:9px;margin-top:14px}.expense-bar{display:grid;grid-template-columns:minmax(170px,.35fr) 1fr minmax(110px,.18fr);gap:10px;align-items:center}.expense-track{height:10px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;border:1px solid var(--line)}.expense-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--accent2))}.expense-note{color:var(--muted);font-size:12px;text-align:right}.expense-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.product-title{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.sku-chip{display:inline-flex;padding:7px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted);font-size:12px}.rank-good{color:var(--good);font-weight:750}.rank-bad{color:var(--bad);font-weight:750}.filters label{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}.filters label input,.filters label select{min-width:145px}footer{color:var(--muted);font-size:12px;text-align:center;padding:28px 0 10px}
 @media(max-width:1150px){.grid{grid-template-columns:repeat(3,1fr)}.two-col,.admin-cols{grid-template-columns:1fr}}@media(max-width:650px){.wrap{padding:16px}header{align-items:flex-start;flex-direction:column}.grid{grid-template-columns:repeat(2,1fr)}.card{padding:14px}.chart-box{height:300px}.form-grid>*{width:100%}}
+
+.sku-matrix-wrap{overflow:auto;border-radius:16px;border:1px solid var(--line);max-height:72vh}.sku-matrix{min-width:2350px;border-collapse:separate;border-spacing:0}.sku-matrix th,.sku-matrix td{font-size:12px;padding:9px 8px}.sku-matrix th{z-index:3}.sku-matrix .sticky-product{position:sticky;left:0;background:#141722;z-index:2;min-width:330px;text-align:left}.sku-matrix th.sticky-product{z-index:4}.sku-product-cell{display:flex;gap:10px;align-items:center}.sku-img{width:46px;height:60px;border-radius:10px;object-fit:cover;background:rgba(255,255,255,.06);border:1px solid var(--line)}.sku-name{font-weight:750;white-space:normal;line-height:1.25}.sku-meta{font-size:11px;color:var(--muted);margin-top:4px}.sku-matrix input,.sku-matrix select{width:105px;padding:7px 8px;border-radius:9px;font-size:12px}.sku-matrix select.warehouse-input{width:165px}.sku-matrix input.changed,.sku-matrix select.changed{border-color:rgba(224,64,251,.75);box-shadow:0 0 0 2px rgba(224,64,251,.12)}.sku-status{display:inline-flex;padding:5px 8px;border-radius:999px;font-weight:750}.sku-status.good{background:rgba(61,220,151,.12);color:var(--good);border:1px solid rgba(61,220,151,.3)}.sku-status.warn{background:rgba(255,204,102,.12);color:var(--warn);border:1px solid rgba(255,204,102,.35)}.sku-status.bad{background:rgba(255,102,120,.12);color:var(--bad);border:1px solid rgba(255,102,120,.35)}.matrix-toolbar{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}.matrix-toolbar .field{min-width:170px;margin-bottom:0}.matrix-impact.pos{color:var(--good);font-weight:750}.matrix-impact.neg{color:var(--bad);font-weight:750}.matrix-mode-badge{font-size:12px;color:var(--muted);padding:7px 10px;border:1px dashed var(--line);border-radius:999px}
+
 </style>
 """
 
@@ -75,7 +78,7 @@ table{width:100%;border-collapse:collapse;min-width:1050px}th,td{padding:11px 10
 DASHBOARD_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>{{ title }}</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>{{ title }}</h1><div class="subtitle">Финансы Wildberries · история себестоимости · внешний P&amp;L</div></div><div class="badge">Последнее сохранение: {{ latest_created }}</div></header>
-<nav class="nav"><a class="active" href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a class="active" href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-matrix">SKU-юнитка</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><select name="period_type" aria-label="Тип периода"><option value="actual" {% if selected_type == 'actual' %}selected{% endif %}>Актуально без дублей</option><option value="" {% if selected_type == '' %}selected{% endif %}>Все сохранённые периоды</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Загруженные Excel</option></select><label>С даты <input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату <input type="date" name="date_to" value="{{ date_to_value }}"></label><select name="expense_base" aria-label="База процентов"><option value="revenue" {% if expense_base == 'revenue' %}selected{% endif %}>Расходы: % от выручки</option><option value="expenses" {% if expense_base == 'expenses' %}selected{% endif %}>Расходы: % от всех расходов</option></select><button type="submit">Показать</button><a class="button secondary" href="/?period_type=actual">С первой продажи по сейчас</a></form>{% if selected_type == 'actual' %}<div class="hint">Режим <b>«Актуально без дублей»</b>: закрытые недели берутся из недельных отчётов, а текущая незакрытая неделя — из ежедневных отчётов. Если не выбрать даты, дашборд показывает период от первой сохранённой продажи до текущего дня. Для свежих дней запусти в Telegram <b>/syncdaily</b>.</div>{% endif %}
 {% if latest %}<div class="grid">
 <div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(latest.revenue) }}</div></div><div class="card"><div class="label">Расчётная выплата</div><div class="value">{{ money(latest.payout) }}</div></div><div class="card"><div class="label">Прибыль до налога</div><div class="value {{ 'good' if latest.profit_before_tax >= 0 else 'bad' }}">{{ money(latest.profit_before_tax) }}</div></div><div class="card"><div class="label">УСН 6%</div><div class="value">{{ money(latest.tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if latest.profit >= 0 else 'bad' }}">{{ money(latest.profit) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(latest.cogs) }}</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(latest.external_expenses) }}</div></div><div class="card"><div class="label">Реклама WB</div><div class="value">{{ money(latest.advertising) }}</div></div><div class="card"><div class="label">ДРР / Маржа</div><div class="value {{ margin_class(latest.margin) }}">{{ percent(latest.drr) }} / {{ percent(latest.margin) }}</div></div><div class="card"><div class="label">Продано</div><div class="value">{{ units(latest.units) }} шт.</div></div></div>
@@ -99,12 +102,54 @@ DASHBOARD_TEMPLATE = r"""
 PRODUCTS_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Товары · {{ title }}</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Аналитика по товарам</h1><div class="subtitle">Прибыль, маржа и ДРР каждого SKU за выбранные сохранённые периоды</div></div><div class="badge">Найдено товаров: {{ totals.products }}</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a class="active" href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a class="active" href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-matrix">SKU-юнитка</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><label>Периоды<select name="period_type"><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select></label><label>С даты<input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату<input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск<input name="q" value="{{ query }}" placeholder="Название, артикул или nmID"></label><button type="submit">Показать</button>{% if query or date_from_value or date_to_value %}<a class="button secondary" href="/products?period_type={{ selected_type }}">Сбросить</a>{% endif %}</form>
 <div class="hint">Чтобы суммы не задваивались, здесь одновременно используется только один тип периодов. По умолчанию выбраны закрытые недельные отчёты.</div>
 {% if rows %}<div class="grid section"><div class="card"><div class="label">Товаров</div><div class="value">{{ totals.products }}</div></div><div class="card"><div class="label">Продано</div><div class="value">{{ units(totals.units) }} шт.</div></div><div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(totals.revenue) }}</div></div><div class="card"><div class="label">Прибыль до налога</div><div class="value {{ 'good' if totals.profit_before_tax >= 0 else 'bad' }}">{{ money(totals.profit_before_tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if totals.profit >= 0 else 'bad' }}">{{ money(totals.profit) }}</div></div><div class="card"><div class="label">Маржа</div><div class="value {{ margin_class(totals.margin) }}">{{ percent(totals.margin) }}</div></div><div class="card"><div class="label">Реклама WB</div><div class="value">{{ money(totals.advertising) }}</div></div><div class="card"><div class="label">ДРР</div><div class="value">{{ percent(totals.drr) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(totals.cogs) }}</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(totals.external_expenses) }}</div></div></div>
 <div class="section card"><div class="section-head"><div><h2>Экономика товаров</h2><div class="subtitle">Нажми на товар, чтобы открыть его график и историю по периодам</div></div><span class="muted">{{ type_label(selected_type) }}</span></div><div class="table-wrap"><table style="min-width:1430px"><thead><tr><th>Товар</th><th>Артикул</th><th>Периодов</th><th>Шт.</th><th>Доход</th><th>Выплата</th><th>Себес.</th><th>Внешние</th><th>Реклама</th><th>До налога</th><th>УСН</th><th>Чистая</th><th>Прибыль / шт.</th><th>Маржа</th><th>ДРР</th><th>Последний период</th></tr></thead><tbody>{% for row in rows %}<tr><td><a class="text-link" href="{{ url_for('product_detail', sku=row.sku, period_type=selected_type, date_from=date_from_value, date_to=date_to_value) }}">{{ row.name or row.sku }}</a></td><td class="muted">{{ row.sku }}</td><td>{{ row.periods }}</td><td>{{ units(row.units) }}</td><td>{{ money(row.revenue) }}</td><td>{{ money(row.payout) }}</td><td>{{ money(row.cogs) }}</td><td>{{ money(row.external_expenses) }}</td><td>{{ money(row.advertising) }}</td><td class="{{ 'profit-pos' if row.profit_before_tax >= 0 else 'profit-neg' }}">{{ money(row.profit_before_tax) }}</td><td>{{ money(row.tax) }}</td><td class="{{ 'profit-pos' if row.profit >= 0 else 'profit-neg' }}">{{ money(row.profit) }}</td><td>{{ money(row.profit / row.units if row.units else 0) }}</td><td>{{ percent(row.margin) }}</td><td>{{ percent(row.drr) }}</td><td class="muted">{{ date_display(row.last_period) }}</td></tr>{% endfor %}</tbody></table></div></div>{% else %}<div class="card empty section">По выбранным фильтрам товары не найдены. Сначала сохрани отчёты через /week или /backfill.</div>{% endif %}
 <footer>WB Profit Dashboard · аналитика строится по сохранённым данным PostgreSQL</footer></div></body></html>
+"""
+
+
+UNIT_MATRIX_TEMPLATE = r"""
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>SKU-юнитка · WB Profit</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
+<header><div><h1>Интерактивная юнит-экономика по SKU</h1><div class="subtitle">Excel-like таблица: меняй цену, комиссию, склад, логистику, себестоимость и рекламу прямо в строке товара</div></div><div class="badge">Факт + сценарии · v37</div></header>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a class="active" href="/unit-matrix">SKU-юнитка</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
+<form class="filters" method="get"><label>Период<select name="period_type"><option value="actual" {% if selected_type == 'actual' %}selected{% endif %}>Актуально без дублей</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select></label><label>С даты<input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату<input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск<input name="q" value="{{ query }}" placeholder="товар / артикул / nmID"></label><label>Целевая маржа, %<input id="targetMarginInput" name="target_margin" inputmode="decimal" value="{{ target_margin_input }}"></label><button type="submit">Показать</button></form>
+<div class="hint">Фактический режим показывает базовую юнит-экономику из сохранённых отчётов. Изменения в таблице — это <b>сценарий</b>: они не затирают данные WB и не меняют себестоимость в базе, пока ты отдельно не сохранишь её в разделе «Себестоимость и расходы».</div>
+{% if tariff_warning %}<div class="notice error">{{ tariff_warning }}</div>{% endif %}
+<div class="section card"><div class="section-head"><div><h2>Управление сценарием</h2><div class="subtitle">Меняй ячейки — прибыль, маржа, ROI и минимальная цена пересчитаются сразу без перезагрузки</div></div><span id="scenarioStatus" class="matrix-mode-badge">Фактическая база</span></div>
+<div class="matrix-toolbar"><div class="field"><label>Фильтр категории</label><select id="filterCategory"><option value="">Все</option>{% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select></div><div class="field"><label>Фильтр бренда</label><select id="filterBrand"><option value="">Все</option>{% for b in brands %}<option value="{{ b }}">{{ b }}</option>{% endfor %}</select></div><div class="field"><label>Фильтр склада</label><select id="filterWarehouse"><option value="">Все</option>{% for wh in warehouse_options %}<option value="{{ wh }}">{{ wh }}</option>{% endfor %}</select></div><div class="field"><label>Статус</label><select id="filterStatus"><option value="">Все</option><option value="good">Прибыльный</option><option value="warn">На грани</option><option value="bad">Убыточный</option></select></div><div class="field"><label>Мин. маржа, %</label><input id="filterMargin" inputmode="decimal" placeholder="например 10"></div><button type="button" class="secondary" id="saveScenarioBtn">Сохранить сценарий</button><button type="button" class="secondary" id="resetScenarioBtn">Сбросить изменения</button><button type="button" class="secondary" id="restoreWbBtn">Вернуть данные из WB</button><button type="button" id="compareBtn">Сравнить с базой</button></div></div>
+<div class="grid section"><div class="card"><div class="label">SKU в таблице</div><div class="value" id="visibleCount">{{ rows|length }}</div></div><div class="card"><div class="label">Сценарная прибыль</div><div class="value good" id="totalProfit">0 ₽</div></div><div class="card"><div class="label">Влияние на прибыль</div><div class="value" id="totalImpact">0 ₽</div></div><div class="card"><div class="label">Средняя маржа</div><div class="value" id="avgMargin">0%</div></div><div class="card"><div class="label">Убыточных / на грани</div><div class="value" id="badCount">0 / 0</div></div></div>
+<div class="section card"><div class="section-head"><div><h2>Таблица SKU</h2><div class="subtitle">Первая колонка закреплена. Склад выбирается прямо в ячейке; при выборе подтягиваются тарифы WB, если склад есть в тарифах.</div></div><span class="muted">{{ period_label }}</span></div><div class="sku-matrix-wrap"><table class="sku-matrix" id="unitMatrix"><thead><tr><th class="sticky-product">Товар</th><th>Артикул WB / SKU</th><th>SKU / размер / цвет</th><th>Категория</th><th>Цена продажи</th><th>Себестоимость</th><th>Комиссия WB, %</th><th>Комиссия WB, ₽</th><th>Склад</th><th>Логистика, ₽</th><th>Хранение, ₽</th><th>Реклама / ДРР</th><th>Налог, %</th><th>Прочие расходы</th><th>Чистая прибыль, ₽</th><th>Маржа, %</th><th>ROI, %</th><th>Точка безуб.</th><th>Мин. цена</th><th>Цена для маржи</th><th>Влияние</th><th>Статус</th></tr></thead><tbody>
+{% for row in rows %}<tr data-row='{{ row.json|safe }}' data-category="{{ row.category }}" data-brand="{{ row.brand }}"><td class="sticky-product"><div class="sku-product-cell"><img class="sku-img" src="{{ row.photo_url }}" onerror="this.style.display='none'"><div><div class="sku-name">{{ row.name }}</div><div class="sku-meta">nmID {{ row.nm_id or '—' }} · факт: {{ units(row.units) }} шт.</div></div></div></td><td>{{ row.sku }}</td><td class="muted">{{ row.variant }}</td><td>{{ row.category }}</td><td><input class="js-field" data-key="price" inputmode="decimal"></td><td><input class="js-field" data-key="cost" inputmode="decimal"></td><td><input class="js-field" data-key="commissionPct" inputmode="decimal"></td><td class="js-commissionRub">0 ₽</td><td><select class="js-field warehouse-input" data-key="warehouse"><option value="">—</option>{% for wh in warehouse_options %}<option value="{{ wh }}">{{ wh }}</option>{% endfor %}<option value="manual">Мой склад вручную</option></select></td><td><input class="js-field" data-key="logistics" inputmode="decimal"></td><td><input class="js-field" data-key="storage" inputmode="decimal"></td><td><input class="js-field" data-key="drr" inputmode="decimal"></td><td><input class="js-field" data-key="taxPct" inputmode="decimal"></td><td><input class="js-field" data-key="other" inputmode="decimal"></td><td class="js-profit">0 ₽</td><td class="js-margin">0%</td><td class="js-roi">0%</td><td class="js-breakEven">0 ₽</td><td class="js-minPrice">0 ₽</td><td class="js-targetPrice">0 ₽</td><td class="js-impact matrix-impact">0 ₽</td><td><span class="sku-status js-status">—</span></td></tr>{% else %}<tr><td colspan="22" class="empty">Нет товаров за выбранный период.</td></tr>{% endfor %}
+</tbody></table></div><div class="hint">Формула сценария: чистая прибыль = цена − себестоимость − комиссия WB − логистика − хранение − реклама − налог − прочие расходы. ROI = прибыль / себестоимость. Точка безубыточности учитывает постоянные расходы на единицу и переменные проценты: комиссия, ДРР и налог.</div></div>
+<script>
+const tariffMap = {{ tariff_map|tojson }};
+const moneyFmt = new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2});
+const num = (v)=>{ if(v===null||v===undefined) return 0; if(typeof v==='number') return v; const s=String(v).replace(/\s/g,'').replace('%','').replace(',','.'); const n=parseFloat(s); return Number.isFinite(n)?n:0; };
+const money = (v)=> moneyFmt.format(v).replace(',', '.') + ' ₽';
+const pct = (v)=> (Math.round(v*10)/10).toString().replace('.', ',') + '%';
+const rows = Array.from(document.querySelectorAll('#unitMatrix tbody tr[data-row]'));
+function setInput(tr,key,value){ const el=tr.querySelector(`[data-key="${key}"]`); if(!el) return; el.value = (typeof value === 'number') ? (Math.round(value*100)/100).toString().replace('.', ',') : (value||''); el.dataset.base = el.value; }
+function hydrate(){ rows.forEach(tr=>{ const d=JSON.parse(tr.dataset.row); tr._base=d; setInput(tr,'price',d.price); setInput(tr,'cost',d.cost); setInput(tr,'commissionPct',d.commissionPct*100); setInput(tr,'warehouse',d.warehouse||''); setInput(tr,'logistics',d.logistics); setInput(tr,'storage',d.storage); setInput(tr,'drr',d.drr*100); setInput(tr,'taxPct',d.taxPct*100); setInput(tr,'other',d.other); recalcRow(tr); }); applyFilters(); }
+function values(tr){ return {price:num(tr.querySelector('[data-key="price"]').value), cost:num(tr.querySelector('[data-key="cost"]').value), commissionPct:num(tr.querySelector('[data-key="commissionPct"]').value)/100, warehouse:tr.querySelector('[data-key="warehouse"]').value, logistics:num(tr.querySelector('[data-key="logistics"]').value), storage:num(tr.querySelector('[data-key="storage"]').value), drr:num(tr.querySelector('[data-key="drr"]').value)/100, taxPct:num(tr.querySelector('[data-key="taxPct"]').value)/100, other:num(tr.querySelector('[data-key="other"]').value)}; }
+function calc(v,targetMargin){ const commissionRub=v.price*v.commissionPct; const adRub=v.price*v.drr; const taxRub=v.price*v.taxPct; const profit=v.price-v.cost-commissionRub-v.logistics-v.storage-adRub-taxRub-v.other; const margin=v.price?profit/v.price*100:0; const roi=v.cost?profit/v.cost*100:0; const fixed=v.cost+v.logistics+v.storage+v.other; const variable=v.commissionPct+v.drr+v.taxPct; const breakEven=(1-variable)>0.0001?fixed/(1-variable):0; const targetPrice=(1-variable-targetMargin)>0.0001?fixed/(1-variable-targetMargin):0; return {commissionRub,adRub,taxRub,profit,margin,roi,breakEven,minPrice:breakEven,targetPrice}; }
+function recalcRow(tr){ const targetMargin=num(document.getElementById('targetMarginInput').value)/100; const v=values(tr); const c=calc(v,targetMargin); const base=tr._base||{}; const impact=c.profit-(base.baseProfit??0); tr.querySelector('.js-commissionRub').textContent=money(c.commissionRub); tr.querySelector('.js-profit').textContent=money(c.profit); tr.querySelector('.js-profit').className='js-profit '+(c.profit>=0?'profit-pos':'profit-neg'); tr.querySelector('.js-margin').textContent=pct(c.margin); tr.querySelector('.js-margin').className='js-margin '+(c.margin>=10?'profit-pos':c.margin>=0?'value warn':'profit-neg'); tr.querySelector('.js-roi').textContent=pct(c.roi); tr.querySelector('.js-breakEven').textContent=money(c.breakEven); tr.querySelector('.js-minPrice').textContent=money(c.minPrice); tr.querySelector('.js-targetPrice').textContent=money(c.targetPrice); tr.querySelector('.js-impact').textContent=(impact>=0?'+':'')+money(impact); tr.querySelector('.js-impact').className='js-impact matrix-impact '+(impact>=0?'pos':'neg'); const st=tr.querySelector('.js-status'); let status='Прибыльный', cls='good'; if(c.profit<0){status='Убыточный';cls='bad'} else if(c.margin<5){status='На грани';cls='warn'} st.textContent=status; st.className='sku-status js-status '+cls; tr.dataset.status=cls; tr.dataset.margin=String(c.margin); tr.dataset.warehouse=v.warehouse; tr._calc=c; tr.querySelectorAll('.js-field').forEach(el=>{el.classList.toggle('changed', String(el.value)!==String(el.dataset.base||''));}); }
+function recalcAll(){ rows.forEach(recalcRow); updateTotals(); applyFilters(false); }
+function updateTotals(){ let visible=0, profit=0, impact=0, revenue=0, bad=0, warn=0; rows.forEach(tr=>{ if(tr.style.display==='none') return; visible++; const c=tr._calc||{}; const v=values(tr); profit+=c.profit||0; impact+=(c.profit-(tr._base?.baseProfit||0)); revenue+=v.price; if(tr.dataset.status==='bad') bad++; if(tr.dataset.status==='warn') warn++;}); document.getElementById('visibleCount').textContent=visible; document.getElementById('totalProfit').textContent=money(profit); document.getElementById('totalImpact').textContent=(impact>=0?'+':'')+money(impact); document.getElementById('totalImpact').className='value '+(impact>=0?'good':'bad'); document.getElementById('avgMargin').textContent=pct(revenue?profit/revenue*100:0); document.getElementById('badCount').textContent=`${bad} / ${warn}`; }
+function applyTariff(tr){ const wh=tr.querySelector('[data-key="warehouse"]').value; const t=tariffMap[wh]; if(!t) return; const log=tr.querySelector('[data-key="logistics"]'); const st=tr.querySelector('[data-key="storage"]'); log.value=String(Math.round((t.base||0)*100)/100).replace('.', ','); st.value=String(Math.round((t.storage||0)*100)/100).replace('.', ','); recalcRow(tr); }
+function applyFilters(doTotals=true){ const fc=document.getElementById('filterCategory').value, fb=document.getElementById('filterBrand').value, fw=document.getElementById('filterWarehouse').value, fs=document.getElementById('filterStatus').value, fm=num(document.getElementById('filterMargin').value); rows.forEach(tr=>{let ok=true; if(fc&&tr.dataset.category!==fc) ok=false; if(fb&&tr.dataset.brand!==fb) ok=false; if(fw&&tr.dataset.warehouse!==fw) ok=false; if(fs&&tr.dataset.status!==fs) ok=false; if(fm&&num(tr.dataset.margin)<fm) ok=false; tr.style.display=ok?'':'none';}); if(doTotals) updateTotals(); }
+document.addEventListener('input',e=>{ if(e.target.classList.contains('js-field')){ const tr=e.target.closest('tr'); recalcRow(tr); updateTotals(); } if(['filterMargin'].includes(e.target.id)) applyFilters(); });
+document.addEventListener('change',e=>{ if(e.target.classList.contains('warehouse-input')) applyTariff(e.target.closest('tr')); if(e.target.id && e.target.id.startsWith('filter')) applyFilters(); });
+document.getElementById('targetMarginInput').addEventListener('input', recalcAll);
+document.getElementById('resetScenarioBtn').onclick=()=>{hydrate(); document.getElementById('scenarioStatus').textContent='Изменения сброшены';};
+document.getElementById('restoreWbBtn').onclick=()=>{hydrate(); document.getElementById('scenarioStatus').textContent='Вернули фактическую базу WB';};
+document.getElementById('compareBtn').onclick=()=>{updateTotals(); document.getElementById('scenarioStatus').textContent='Сравнение активно: смотри колонку «Влияние»';};
+document.getElementById('saveScenarioBtn').onclick=()=>{ const name=prompt('Название сценария'); if(!name) return; const data=rows.map(tr=>({sku:tr._base.sku, values:values(tr)})); const key='wb_unit_matrix_scenario_'+Date.now(); localStorage.setItem(key, JSON.stringify({name, savedAt:new Date().toISOString(), data})); document.getElementById('scenarioStatus').textContent='Сценарий сохранён в браузере: '+name; };
+hydrate();
+</script>
+<footer>Интерактивная SKU-юнитка · сценарии сохраняются в браузере и не меняют реальные данные WB</footer></div></body></html>
 """
 
 
@@ -125,7 +170,7 @@ PRODUCT_DETAIL_TEMPLATE = r"""
 UNIT_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Юнит-экономика · {{ title }}</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Юнит-экономика</h1><div class="subtitle">Цена, выплата WB, расходы, налог, реклама, маржа и точка безубыточности по каждому SKU</div></div><div class="badge">Товаров: {{ totals.products }}</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a class="active" href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a class="active" href="/unit-economics">Юнит-экономика</a><a href="/unit-matrix">SKU-юнитка</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><label>Периоды<select name="period_type"><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select></label><label>С даты<input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату<input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск<input name="q" value="{{ query }}" placeholder="Название, артикул или nmID"></label><label>Целевая маржа, %<input inputmode="decimal" name="target_margin" value="{{ target_margin_input }}"></label><label>Сценарий ДРР, %<input inputmode="decimal" name="scenario_drr" value="{{ scenario_drr_input }}"></label><button type="submit">Пересчитать</button></form>
 <div class="hint">Расчёт основан на сохранённых отчётах PostgreSQL. Для корректности используй один тип периодов, лучше <b>недельные</b>, чтобы не смешивать дневные и недельные отчёты. Точка безубыточности считается приблизительно: предполагается, что доля выплаты WB от цены остаётся такой же, как в выбранном периоде.</div>
 {% if rows %}<div class="grid section"><div class="card"><div class="label">Продано</div><div class="value">{{ units(totals.units) }} шт.</div></div><div class="card"><div class="label">Средняя цена</div><div class="value">{{ money(totals.avg_price) }}</div></div><div class="card"><div class="label">Прибыль / шт.</div><div class="value {{ 'good' if totals.profit_per_unit >= 0 else 'bad' }}">{{ money(totals.profit_per_unit) }}</div></div><div class="card"><div class="label">Маржа</div><div class="value {{ margin_class(totals.margin) }}">{{ percent(totals.margin) }}</div></div><div class="card"><div class="label">ДРР</div><div class="value">{{ percent(totals.drr) }}</div></div><div class="card"><div class="label">Макс ДРР до нуля</div><div class="value {{ 'bad' if totals.max_drr_zero < totals.drr else 'good' }}">{{ percent(totals.max_drr_zero) }}</div></div><div class="card"><div class="label">Макс ДРР для цели</div><div class="value {{ 'bad' if totals.max_drr_target < totals.drr else 'good' }}">{{ percent(totals.max_drr_target) }}</div></div><div class="card"><div class="label">Сценарий прибыль</div><div class="value {{ 'good' if totals.scenario_profit >= 0 else 'bad' }}">{{ money(totals.scenario_profit) }}</div></div><div class="card"><div class="label">Сценарий маржа</div><div class="value {{ margin_class(totals.scenario_margin) }}">{{ percent(totals.scenario_margin) }}</div></div><div class="card"><div class="label">Товаров в минус</div><div class="value {{ 'bad' if totals.loss_products else 'good' }}">{{ totals.loss_products }}</div></div></div>
@@ -139,7 +184,7 @@ UNIT_TEMPLATE = r"""
 UNIT_CALCULATOR_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Калькулятор юнитки · {{ title }}</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Калькулятор юнит-экономики</h1><div class="subtitle">Плановый расчёт товара: цена, СПП, выкуп, комиссия, логистика, реклама, налоги и чистая прибыль</div></div><div class="badge">Ручной сценарий + тарифы WB · v27</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a class="active" href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-matrix">SKU-юнитка</a><a class="active" href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
 <div class="hint" style="margin:0 0 16px">Это плановый калькулятор. Можно считать сценарии вручную, выбирать склад из тарифов WB или свой FBS-СЦ вручную, подтягивать фактическую логистику из продаж и сохранять расчёты в PostgreSQL. Комиссию WB пока оставь вручную или используй фактическую долю из отчётов, потому что для точной комиссии нужен предмет/категория товара.</div>
 {% if tariff_notice %}<div class="notice {{ tariff_notice.kind }}">{{ tariff_notice.text }}</div>{% endif %}
 <form method="get" class="section">
@@ -325,7 +370,7 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 SUPPLY_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Поставки · WB Profit</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Поставки</h1><div class="subtitle">Остатки FBW/FBS · скорость продаж · дата отправки поставки · рекомендуемое количество</div></div><div class="badge">Остатки: {{ as_of }}</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a class="active" href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-matrix">SKU-юнитка</a><a href="/unit-calculator">Калькулятор юнитки</a><a class="active" href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get">
 <label>Продажи с <input type="date" name="date_from" value="{{ date_from_value }}"></label>
 <label>по <input type="date" name="date_to" value="{{ date_to_value }}"></label>
@@ -360,7 +405,7 @@ SUPPLY_TEMPLATE = r"""
 LOGISTICS_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Логистика и услуги WB · {{ title }}</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Логистика и услуги WB</h1><div class="subtitle">Контроль доли удержаний WB, внешней логистики, расходов на единицу и товаров с высокой нагрузкой</div></div><div class="badge">Период: {{ type_label(selected_type) }}</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a class="active" href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-matrix">SKU-юнитка</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a class="active" href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><select name="period_type"><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select><label>С <input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По <input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск <input name="q" placeholder="товар / артикул / nmID" value="{{ query }}"></label><label>Предупр. WB % <input inputmode="decimal" name="warn_wb" value="{{ warn_input }}"></label><label>Критично WB % <input inputmode="decimal" name="critical_wb" value="{{ critical_input }}"></label><button type="submit">Показать</button></form>
 <div class="grid"><div class="card"><div class="label">Товаров</div><div class="value">{{ totals.products }}</div></div><div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(totals.revenue) }}</div></div><div class="card"><div class="label">WB удержания и услуги</div><div class="value {{ 'bad' if totals.wb_share >= critical_wb else 'warn' if totals.wb_share >= warn_wb else '' }}">{{ money(totals.wb_services) }}</div><div class="subtitle">{{ percent(totals.wb_share) }} от дохода</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(totals.external) }}</div><div class="subtitle">{{ money(totals.external_per_unit) }} / шт.</div></div><div class="card"><div class="label">Общая нагрузка</div><div class="value {{ 'bad' if totals.burden_share >= critical_wb else 'warn' if totals.burden_share >= warn_wb else '' }}">{{ percent(totals.burden_share) }}</div><div class="subtitle">WB + внешние расходы</div></div></div>
 
@@ -383,7 +428,7 @@ new Chart(document.getElementById('logisticsChart'),{type:'bar',data:{labels,dat
 SALES_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>История продаж · WB Profit</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>История продаж</h1><div class="subtitle">Построчная детализация: продажи, возвраты и отдельные расходы WB из финансового отчёта</div></div><div class="badge">{{ summary.operations }} операций</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a class="active" href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a class="active" href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-matrix">SKU-юнитка</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><label>Тип данных <select name="period_type"><option value="actual" {% if selected_type == 'actual' %}selected{% endif %}>Актуально без дублей</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Только подтверждённые недели</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Только ежедневные/оперативные</option><option value="" {% if selected_type == '' %}selected{% endif %}>Все типы, могут быть дубли</option></select></label><label>С даты <input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату <input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Операция <select name="operation_type"><option value="" {% if not operation_type %}selected{% endif %}>Все</option><option value="Продажа" {% if operation_type == 'Продажа' %}selected{% endif %}>Продажи</option><option value="Возврат" {% if operation_type == 'Возврат' %}selected{% endif %}>Возвраты</option><option value="Расход WB" {% if operation_type == 'Расход WB' %}selected{% endif %}>Расходы WB</option></select></label><input name="q" value="{{ query }}" placeholder="Поиск: артикул, товар, nmID"><label><input type="checkbox" name="negative" value="1" {% if only_negative %}checked{% endif %}> только минус</label><label><input type="checkbox" name="missing_cost" value="1" {% if only_missing_cost %}checked{% endif %}> без себеса</label><button type="submit">Показать</button><a class="button secondary" href="{{ export_url }}">Экспорт CSV</a></form>{% if selected_type == 'actual' %}<div class="hint section">Режим <b>«Актуально без дублей»</b>: закрытые недели берутся из недельных отчётов, а текущая незакрытая неделя — из ежедневных отчётов после {{ date_display(actual_cutoff) if actual_cutoff else 'начала доступной истории' }}. Чтобы обновить текущие дни, запусти в Telegram <b>/syncdaily</b>.</div>{% endif %}
 {% if rows %}<div class="grid section"><div class="card"><div class="label">Операций</div><div class="value">{{ summary.operations }}</div></div><div class="card"><div class="label">Кол-во</div><div class="value">{{ units(summary.quantity) }} шт.</div></div><div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(summary.revenue) }}</div></div><div class="card"><div class="label">Расчётная выплата</div><div class="value">{{ money(summary.payout) }}</div></div><div class="card"><div class="label">WB удержания</div><div class="value">{{ money(summary.wb_expenses) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(summary.cogs) }}</div></div><div class="card"><div class="label">Реклама</div><div class="value">{{ money(summary.advertising) }}</div></div><div class="card"><div class="label">До налога</div><div class="value {{ 'good' if summary.profit_before_tax >= 0 else 'bad' }}">{{ money(summary.profit_before_tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if summary.profit >= 0 else 'bad' }}">{{ money(summary.profit) }}</div></div><div class="card"><div class="label">Маржа / ДРР</div><div class="value {{ margin_class(summary.margin) }}">{{ percent(summary.margin) }} / {{ percent(summary.drr) }}</div></div></div>
 <div class="section card"><div class="section-head"><div><h2>Операции</h2><div class="subtitle">Дата берётся из продажи/возврата WB; если WB не отдал дату — используется период отчёта</div></div><span class="muted">Показано до {{ limit }} строк</span></div><div class="table-wrap"><table style="min-width:1900px"><thead><tr><th>Дата</th><th>Операция</th><th>Товар</th><th>Артикул</th><th>nmID</th><th>Шт.</th><th>Цена/доход</th><th>Выплата WB</th><th>WB удержания</th><th>Логистика</th><th>Приёмка</th><th>Хранение</th><th>Прочие WB</th><th>Себес.</th><th>Внешние</th><th>Реклама</th><th>До налога</th><th>УСН</th><th>Чистая</th><th>Маржа</th><th>Статус</th><th>Период отчёта</th></tr></thead><tbody>{% for row in rows %}<tr><td>{{ date_display(row.operation_date or row.period_start) }}</td><td class="{{ 'profit-neg' if row.operation_type == 'Возврат' else '' }}">{{ row.operation_type }}</td><td>{{ row.name or row.sku }}</td><td class="muted">{{ row.sku }}</td><td class="muted">{{ row.nm_id or '—' }}</td><td>{{ units(row.quantity) }}</td><td>{{ money(row.revenue) }}</td><td>{{ money(row.payout) }}</td><td>{{ money(row.wb_expenses) }}</td><td>{{ money(row.logistics + row.transport) }}</td><td>{{ money(row.handling) }}</td><td>{{ money(row.storage) }}</td><td>{{ money(row.other_withholdings + row.fines) }}</td><td class="{{ 'profit-neg' if row.missing_cost else '' }}">{{ money(row.cogs) }}{% if row.missing_cost %} ⚠{% endif %}</td><td>{{ money(row.external_expenses) }}</td><td>{{ money(row.advertising) }}</td><td class="{{ 'profit-pos' if row.profit_before_tax >= 0 else 'profit-neg' }}">{{ money(row.profit_before_tax) }}</td><td>{{ money(row.tax) }}</td><td class="{{ 'profit-pos' if row.profit >= 0 else 'profit-neg' }}">{{ money(row.profit) }}</td><td>{{ percent(row.margin) }}</td><td>{% if row.period_type == 'weekly' %}<span class="rank-good">Подтверждено</span>{% elif row.period_type == 'daily' %}<span class="value warn">Оперативно</span>{% else %}<span class="muted">{{ row.period_type }}</span>{% endif %}</td><td class="muted">{{ period(row.period_start,row.period_end) }}</td></tr>{% endfor %}</tbody></table></div><div class="hint">Чтобы текущая незакрытая неделя появилась в истории, запусти в Telegram <b>/syncdaily</b>. Для загрузки ежедневных отчётов с конкретной даты используй <b>/backfilldaily ДД.ММ.ГГГГ</b>. Закрытые недели остаются финальными, дневные строки помечены как оперативные.</div></div>{% else %}<div class="card empty section">Операций пока нет. Установи v24 и запусти в Telegram <b>/backfill 01.04.2026</b>, чтобы заполнить построчную историю.</div>{% endif %}
@@ -413,7 +458,7 @@ ADMIN_TEMPLATE = r"""
 RECONCILE_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Сверка · WB Profit</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Сверка WB и дашборда</h1><div class="subtitle">Объясняет расхождения между балансом WB, недельными отчётами, ежедневными отчётами и историей продаж</div></div><div class="badge">{{ period_label }}</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a class="active" href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a class="active" href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-matrix">SKU-юнитка</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><label>С даты <input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату <input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Стартовый баланс WB, ₽ <input inputmode="decimal" name="start_balance" value="{{ start_balance_input }}" placeholder="например -25000"></label><label>Текущий баланс WB, ₽ <input inputmode="decimal" name="end_balance" value="{{ end_balance_input }}" placeholder="например 81000"></label><button type="submit">Сверить</button><a class="button secondary" href="/reconcile">Сбросить</a></form>
 
 <div class="grid section">
@@ -1463,7 +1508,7 @@ def _calculate_unit_plan(values: DotDict) -> tuple[DotDict, list[dict[str, str]]
 AI_ANALYST_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>AI-аналитик · WB Profit</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>AI-аналитик</h1><div class="subtitle">Автоматический разбор прибыли, выручки, ДРР, маржи, расходов WB и проблемных SKU</div></div><div class="badge">Период: {{ date_display(date_from) }} — {{ date_display(date_to) }}</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a class="active" href="/ai-analyst">AI-аналитик</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-matrix">SKU-юнитка</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a class="active" href="/ai-analyst">AI-аналитик</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get">
 <label>С даты <input type="date" name="date_from" value="{{ date_from.isoformat() }}"></label><label>По дату <input type="date" name="date_to" value="{{ date_to.isoformat() }}"></label>
 <label>Мин. маржа, % <input inputmode="decimal" name="min_margin" value="{{ percent_input(min_margin) }}"></label><label>Макс. ДРР, % <input inputmode="decimal" name="max_drr" value="{{ percent_input(max_drr) }}"></label>
@@ -1497,7 +1542,7 @@ new Chart(document.getElementById('aiChart'), {type:'bar', data:{labels, dataset
 AI_CHAT_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>AI-чат · WB Profit</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>AI-чат</h1><div class="subtitle">Настоящий AI-анализ по данным PostgreSQL: продажи, прибыль, ДРР, маржа, расходы, проблемные SKU</div></div><div class="badge">{{ model_label }}</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a class="active" href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-matrix">SKU-юнитка</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a class="active" href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
 
 <div class="section card">
   <form method="post" action="/ai-chat" class="filters">
@@ -1543,7 +1588,7 @@ AI_CHAT_TEMPLATE = r"""
 PLAN_FACT_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>План-факт · WB Profit</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>План-факт</h1><div class="subtitle">Сравнение фактической выручки, прибыли, продаж, маржи и ДРР с целями</div></div><div class="badge">Период: {{ date_display(date_from) }} — {{ date_display(date_to) }}</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a class="active" href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-matrix">SKU-юнитка</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a class="active" href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get">
 <label>С даты <input type="date" name="date_from" value="{{ date_from.isoformat() }}"></label>
 <label>По дату <input type="date" name="date_to" value="{{ date_to.isoformat() }}"></label>
@@ -1589,6 +1634,113 @@ PLAN_FACT_TEMPLATE = r"""
 </div></body></html>
 """
 
+
+
+def _wb_image_url(nm_id: Any) -> str:
+    try:
+        nm = int(nm_id or 0)
+    except (TypeError, ValueError):
+        nm = 0
+    if nm <= 0:
+        return ""
+    vol = nm // 100000
+    part = nm // 1000
+    # Approximate current WB basket routing. If it changes, image simply hides via onerror.
+    basket = 1
+    thresholds = [(143,1),(287,2),(431,3),(719,4),(1007,5),(1061,6),(1115,7),(1169,8),(1313,9),(1601,10),(1655,11),(1919,12),(2045,13),(2189,14),(2405,15),(2621,16),(2837,17),(3053,18),(3269,19)]
+    for max_vol, b in thresholds:
+        if vol <= max_vol:
+            basket = b
+            break
+    else:
+        basket = 20
+    return f"https://basket-{basket:02d}.wbbasket.ru/vol{vol}/part{part}/{nm}/images/c246x328/1.webp"
+
+
+def _load_box_tariff_map(tariff_date: str, scheme: str = "fbs") -> tuple[list[str], dict[str, dict[str, float]], str]:
+    """Load simple warehouse tariff map for interactive SKU matrix."""
+    try:
+        payload = _wb_get_json(TARIFF_BOX_URL, {"date": tariff_date})
+        rows = _warehouse_rows(payload)
+    except Exception as exc:
+        return [], {}, f"Тарифы WB не загружены: {exc}"
+    names: list[str] = []
+    seen: set[str] = set()
+    out: dict[str, dict[str, float]] = {}
+    for row in rows:
+        name = str(row.get("warehouseName") or row.get("name") or "").strip()
+        if not name:
+            continue
+        if name.casefold() not in seen:
+            names.append(name)
+            seen.add(name.casefold())
+        if scheme == "fbs":
+            base = _ru_float(row.get("boxDeliveryMarketplaceBase")) or _ru_float(row.get("boxDeliveryBase"))
+            liter = _ru_float(row.get("boxDeliveryMarketplaceLiter")) or _ru_float(row.get("boxDeliveryLiter"))
+        else:
+            base = _ru_float(row.get("boxDeliveryBase"))
+            liter = _ru_float(row.get("boxDeliveryLiter"))
+        storage_base = _ru_float(row.get("boxStorageBase"))
+        out[name] = {"base": float(base or 0.0), "liter": float(liter or 0.0), "storage": float(storage_base or 0.0)}
+    names.sort(key=lambda x: x.casefold())
+    return names, out, ""
+
+
+def _unit_matrix_row_from_summary(row: Any, detail: dict[str, Any] | None = None) -> SimpleNamespace:
+    units = abs(float(getattr(row, "units", 0.0) or 0.0))
+    if units <= 0.000001:
+        units = 1.0
+    revenue = float(getattr(row, "revenue", 0.0) or 0.0)
+    payout = float(getattr(row, "payout", 0.0) or 0.0)
+    cogs = float(getattr(row, "cogs", 0.0) or 0.0)
+    advertising = float(getattr(row, "advertising", 0.0) or 0.0)
+    tax = float(getattr(row, "tax", 0.0) or 0.0)
+    external = float(getattr(row, "external_expenses", 0.0) or 0.0)
+    profit = float(getattr(row, "profit", 0.0) or 0.0)
+    price = _div(revenue, units)
+    cost = _div(abs(cogs), units)
+    primary_wb = max(revenue - payout, 0.0)
+    commission_pct = _div(primary_wb, revenue)
+    logistics = _div(abs(float((detail or {}).get("logistics_total", 0.0) or 0.0)), abs(float((detail or {}).get("quantity", units) or units))) if detail else 0.0
+    storage = _div(abs(float((detail or {}).get("storage", 0.0) or 0.0)), abs(float((detail or {}).get("quantity", units) or units))) if detail else 0.0
+    other_wb = 0.0
+    if detail:
+        other_wb = abs(float((detail or {}).get("handling", 0.0) or 0.0)) + abs(float((detail or {}).get("fines", 0.0) or 0.0)) + abs(float((detail or {}).get("other", 0.0) or 0.0)) + abs(float((detail or {}).get("unallocated", 0.0) or 0.0))
+        other_wb = _div(other_wb, abs(float((detail or {}).get("quantity", units) or units)))
+    other = _div(abs(external), units) + other_wb
+    drr = _div(abs(advertising), revenue)
+    tax_pct = _div(abs(tax), revenue)
+    base_profit = price - cost - price * commission_pct - logistics - storage - price * drr - price * tax_pct - other
+    # If saved profit exists, use it as comparison base; scenario formula remains transparent.
+    base_profit = _div(profit, units) if abs(profit) > 0.000001 else base_profit
+    nm_id = getattr(row, "nm_id", None)
+    sku = str(getattr(row, "sku", "") or "")
+    name = str(getattr(row, "name", "") or sku or "Товар")
+    data = {
+        "sku": sku,
+        "nmId": int(nm_id) if nm_id else 0,
+        "price": round(price, 2),
+        "cost": round(cost, 2),
+        "commissionPct": round(commission_pct, 6),
+        "warehouse": "",
+        "logistics": round(logistics, 2),
+        "storage": round(storage, 2),
+        "drr": round(drr, 6),
+        "taxPct": round(tax_pct, 6),
+        "other": round(other, 2),
+        "baseProfit": round(base_profit, 2),
+    }
+    return SimpleNamespace(
+        sku=sku,
+        name=name,
+        nm_id=nm_id,
+        units=units,
+        variant=sku,
+        category="—",
+        brand="—",
+        photo_url=_wb_image_url(nm_id),
+        json=json.dumps(data, ensure_ascii=False).replace("'", "&#39;"),
+    )
 
 
 def _report_from_sales_summary(summary: Any, *, date_from: date | None, date_to: date | None) -> SimpleNamespace:
@@ -2344,7 +2496,7 @@ def ai_analyst():
 FUNNEL_ADS_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Воронка и реклама · WB Profit</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>Воронка и реклама</h1><div class="subtitle">Клики, корзины, заказы, выкупы и рекламная статистика WB по товарам</div></div><div class="badge">LIVE из WB API + факт из PostgreSQL</div></header>
-<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a class="active" href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
+<nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-matrix">SKU-юнитка</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a class="active" href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><label>С даты <input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату <input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск <input name="q" placeholder="товар / артикул / nmID" value="{{ query }}"></label><label>Мин. падение, % <input inputmode="decimal" name="drop" value="{{ drop_input }}"></label><button type="submit">Обновить</button></form>
 <div class="hint">Воронка подтягивается из WB Analytics: переходы в карточку, корзины, заказы, выкупы и конверсии. Реклама подтягивается из WB Продвижение: показы, клики, CTR, CPC, корзины, заказы, расход. Данные оперативные и могут отличаться от финального финансового отчёта.</div>
 {% for warning in warnings %}<div class="notice error">{{ warning }}</div>{% endfor %}
@@ -3387,6 +3539,86 @@ def unit_economics():
         percent=_percent,
         units=_units,
         margin_class=_margin_class,
+    )
+
+
+@app.get("/unit-matrix")
+def unit_matrix():
+    if not database_enabled():
+        return Response("DATABASE_URL не задан.", 503, {"Content-Type": "text/plain; charset=utf-8"})
+    selected_type = request.args.get("period_type", "actual").strip()
+    if selected_type not in {"actual", "weekly", "daily", "xlsx"}:
+        selected_type = "actual"
+    date_from = _query_date("date_from")
+    date_to = _query_date("date_to") or date.today()
+    if date_from and date_to and date_from > date_to:
+        date_from, date_to = date_to, date_from
+    query = request.args.get("q", "").strip()[:120]
+    target_margin = _query_percent("target_margin", 0.15)
+
+    if selected_type == "actual":
+        sale_rows, _summary, _cutoff = _actual_sales_rows(
+            limit=20000,
+            date_from=date_from,
+            date_to=date_to,
+            query=query,
+            operation_type="",
+            only_negative=False,
+            only_missing_cost=False,
+        )
+        detail_totals, detail_breakdown, detail_rows = _operation_logistics_details(list(sale_rows))
+        detail_by_sku = {str(r.get("sku") or "").casefold(): r for r in detail_rows}
+        source_rows = _sku_summary_from_sales(list(sale_rows))
+        # _sku_summary_from_sales does not include payout/wb_expenses, so enrich from operation rows.
+        payout_by_sku: dict[str, float] = {}
+        for op in sale_rows:
+            k = str(getattr(op, "sku", "") or "").casefold()
+            payout_by_sku[k] = payout_by_sku.get(k, 0.0) + float(getattr(op, "payout", 0.0) or 0.0)
+        enriched = []
+        for row in source_rows:
+            d = dict(row.__dict__)
+            d["payout"] = payout_by_sku.get(str(row.sku or "").casefold(), float(getattr(row, "revenue", 0.0) or 0.0))
+            d["nm_id"] = getattr(row, "nm_id", None)
+            enriched.append(SimpleNamespace(**d))
+        source_rows = enriched
+        period_label = "Актуально без дублей"
+    else:
+        source_rows = list_product_summaries(1000, period_type=selected_type, date_from=date_from, date_to=date_to, query=query)
+        op_rows = list_sale_operations(5000, period_type=selected_type, date_from=date_from, date_to=date_to, query=query)
+        _tot, _bd, detail_rows = _operation_logistics_details(list(op_rows))
+        detail_by_sku = {str(r.get("sku") or "").casefold(): r for r in detail_rows}
+        period_label = _type_label(selected_type)
+
+    matrix_rows = []
+    for row in source_rows:
+        if abs(float(getattr(row, "units", 0.0) or 0.0)) <= 0.000001 and abs(float(getattr(row, "revenue", 0.0) or 0.0)) <= 0.000001:
+            continue
+        d = detail_by_sku.get(str(getattr(row, "sku", "") or "").casefold())
+        matrix_rows.append(_unit_matrix_row_from_summary(row, d))
+    matrix_rows.sort(key=lambda r: (r.name or r.sku).casefold())
+
+    tariff_date = (date_to or date.today()).isoformat()
+    warehouse_options, tariff_map, tariff_warning = _load_box_tariff_map(tariff_date, "fbs")
+    categories = sorted({r.category for r in matrix_rows if r.category}, key=lambda x: x.casefold())
+    brands = sorted({r.brand for r in matrix_rows if r.brand}, key=lambda x: x.casefold())
+    return render_template_string(
+        UNIT_MATRIX_TEMPLATE,
+        rows=matrix_rows,
+        selected_type=selected_type,
+        date_from_value=date_from.isoformat() if date_from else "",
+        date_to_value=date_to.isoformat() if date_to else "",
+        query=query,
+        target_margin_input=_input_percent(target_margin),
+        target_margin=target_margin,
+        warehouse_options=warehouse_options,
+        tariff_map=tariff_map,
+        tariff_warning=tariff_warning,
+        categories=categories,
+        brands=brands,
+        period_label=period_label,
+        money=_money,
+        percent=_percent,
+        units=_units,
     )
 
 
