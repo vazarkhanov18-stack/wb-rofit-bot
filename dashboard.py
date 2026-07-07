@@ -2194,7 +2194,7 @@ def _load_sales_funnel(date_from: date, date_to: date, *, limit_pages: int = 5) 
             "subjectIds": [],
             "tagIds": [],
             "skipDeletedNm": False,
-            "orderBy": {"field": "openCount", "mode": "desc"},
+            "orderBy": {"field": "openCard", "mode": "desc"},
             "limit": limit,
             "offset": offset,
         }
