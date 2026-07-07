@@ -66,7 +66,7 @@ BASE_STYLE = r"""
 .nav{display:flex;gap:9px;flex-wrap:wrap;margin:0 0 18px}.nav a{color:var(--text);text-decoration:none;padding:10px 13px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025);font-size:14px;font-weight:650}.nav a.active,.nav a:hover{background:linear-gradient(135deg,rgba(157,78,221,.42),rgba(224,64,251,.25));border-color:rgba(199,125,255,.45)}
 .filters,.form-grid{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}select,input,textarea,button{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:12px;padding:10px 12px;font-size:14px}textarea{min-height:82px;resize:vertical}input::placeholder,textarea::placeholder{color:#747d90}button,.button{cursor:pointer;background:linear-gradient(135deg,var(--accent),var(--accent2));border:0;font-weight:750;color:white;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}.button.secondary,button.secondary{background:rgba(255,255,255,.06);border:1px solid var(--line)}button.danger{background:rgba(255,102,120,.15);color:#ff9aa7;border:1px solid rgba(255,102,120,.3)}
 .grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}.card{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.015));border:1px solid var(--line);border-radius:18px;padding:17px;min-width:0}.label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}.value{margin-top:9px;font-size:clamp(19px,2.3vw,29px);font-weight:800;letter-spacing:-.035em;overflow-wrap:anywhere}.value.good{color:var(--good)}.value.bad{color:var(--bad)}.value.warn{color:var(--warn)}.section{margin-top:16px}.section-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}h2{margin:0;font-size:20px}h3{margin:0 0 12px;font-size:17px}.chart-box{height:360px}.two-col{display:grid;grid-template-columns:1.35fr .65fr;gap:16px}.admin-cols{display:grid;grid-template-columns:minmax(310px,.72fr) minmax(0,1.28fr);gap:16px}.table-wrap{overflow:auto;border-radius:14px}
-table{width:100%;border-collapse:collapse;min-width:1050px}th,td{padding:11px 10px;border-bottom:1px solid var(--line);text-align:right;font-size:12.5px;white-space:nowrap}th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--panel)}th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}tr:last-child td{border-bottom:0}.profit-pos{color:var(--good);font-weight:700}.profit-neg{color:var(--bad);font-weight:700}.muted{color:var(--muted)}.empty{padding:40px 20px;text-align:center;color:var(--muted)}.period-link,.text-link{color:var(--text);text-decoration:none;font-weight:650}.period-link:hover,.text-link:hover{color:#d6a7ff}.hint{margin-top:12px;padding:12px 14px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:12px;line-height:1.5}.notice{margin-bottom:14px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);font-size:13px}.notice.ok{background:rgba(61,220,151,.10);border-color:rgba(61,220,151,.28);color:#9af0c9}.notice.error{background:rgba(255,102,120,.10);border-color:rgba(255,102,120,.28);color:#ffadb7}.field{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}.field label{color:var(--muted);font-size:12px}.field input,.field textarea,.field select{width:100%}.form-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}.inline-actions{display:flex;gap:7px;justify-content:flex-end}.inline-actions form{margin:0}.small{font-size:11px;padding:7px 9px;border-radius:9px}.summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}.summary span{padding:8px 11px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--muted);font-size:12px}.product-title{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.sku-chip{display:inline-flex;padding:7px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted);font-size:12px}.rank-good{color:var(--good);font-weight:750}.rank-bad{color:var(--bad);font-weight:750}.filters label{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}.filters label input,.filters label select{min-width:145px}footer{color:var(--muted);font-size:12px;text-align:center;padding:28px 0 10px}
+table{width:100%;border-collapse:collapse;min-width:1050px}th,td{padding:11px 10px;border-bottom:1px solid var(--line);text-align:right;font-size:12.5px;white-space:nowrap}th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--panel)}th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}tr:last-child td{border-bottom:0}.profit-pos{color:var(--good);font-weight:700}.profit-neg{color:var(--bad);font-weight:700}.muted{color:var(--muted)}.empty{padding:40px 20px;text-align:center;color:var(--muted)}.period-link,.text-link{color:var(--text);text-decoration:none;font-weight:650}.period-link:hover,.text-link:hover{color:#d6a7ff}.hint{margin-top:12px;padding:12px 14px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:12px;line-height:1.5}.notice{margin-bottom:14px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);font-size:13px}.notice.ok{background:rgba(61,220,151,.10);border-color:rgba(61,220,151,.28);color:#9af0c9}.notice.error{background:rgba(255,102,120,.10);border-color:rgba(255,102,120,.28);color:#ffadb7}.field{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}.field label{color:var(--muted);font-size:12px}.field input,.field textarea,.field select{width:100%}.form-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}.inline-actions{display:flex;gap:7px;justify-content:flex-end}.inline-actions form{margin:0}.small{font-size:11px;padding:7px 9px;border-radius:9px}.summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}.summary span{padding:8px 11px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--muted);font-size:12px}.expense-bars{display:grid;gap:9px;margin-top:14px}.expense-bar{display:grid;grid-template-columns:minmax(170px,.35fr) 1fr minmax(110px,.18fr);gap:10px;align-items:center}.expense-track{height:10px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;border:1px solid var(--line)}.expense-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--accent2))}.expense-note{color:var(--muted);font-size:12px;text-align:right}.expense-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.product-title{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.sku-chip{display:inline-flex;padding:7px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted);font-size:12px}.rank-good{color:var(--good);font-weight:750}.rank-bad{color:var(--bad);font-weight:750}.filters label{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}.filters label input,.filters label select{min-width:145px}footer{color:var(--muted);font-size:12px;text-align:center;padding:28px 0 10px}
 @media(max-width:1150px){.grid{grid-template-columns:repeat(3,1fr)}.two-col,.admin-cols{grid-template-columns:1fr}}@media(max-width:650px){.wrap{padding:16px}header{align-items:flex-start;flex-direction:column}.grid{grid-template-columns:repeat(2,1fr)}.card{padding:14px}.chart-box{height:300px}.form-grid>*{width:100%}}
 </style>
 """
@@ -76,9 +76,17 @@ DASHBOARD_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>{{ title }}</title><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>{{ title }}</h1><div class="subtitle">Финансы Wildberries · история себестоимости · внешний P&amp;L</div></div><div class="badge">Последнее сохранение: {{ latest_created }}</div></header>
 <nav class="nav"><a class="active" href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
-<form class="filters" method="get"><select name="period_type" aria-label="Тип периода"><option value="" {% if not selected_type %}selected{% endif %}>Все сохранённые периоды</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Загруженные Excel</option></select><button type="submit">Показать</button></form>
+<form class="filters" method="get"><select name="period_type" aria-label="Тип периода"><option value="" {% if not selected_type %}selected{% endif %}>Все сохранённые периоды</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Загруженные Excel</option></select><select name="expense_base" aria-label="База процентов"><option value="revenue" {% if expense_base == 'revenue' %}selected{% endif %}>Расходы: % от выручки</option><option value="expenses" {% if expense_base == 'expenses' %}selected{% endif %}>Расходы: % от всех расходов</option></select><button type="submit">Показать</button></form>
 {% if latest %}<div class="grid">
 <div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(latest.revenue) }}</div></div><div class="card"><div class="label">Расчётная выплата</div><div class="value">{{ money(latest.payout) }}</div></div><div class="card"><div class="label">Прибыль до налога</div><div class="value {{ 'good' if latest.profit_before_tax >= 0 else 'bad' }}">{{ money(latest.profit_before_tax) }}</div></div><div class="card"><div class="label">УСН 6%</div><div class="value">{{ money(latest.tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if latest.profit >= 0 else 'bad' }}">{{ money(latest.profit) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(latest.cogs) }}</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(latest.external_expenses) }}</div></div><div class="card"><div class="label">Реклама WB</div><div class="value">{{ money(latest.advertising) }}</div></div><div class="card"><div class="label">ДРР / Маржа</div><div class="value {{ margin_class(latest.margin) }}">{{ percent(latest.drr) }} / {{ percent(latest.margin) }}</div></div><div class="card"><div class="label">Продано</div><div class="value">{{ units(latest.units) }} шт.</div></div></div>
+
+<div class="section card"><div class="section-head"><div><h2>Структура расходов</h2><div class="subtitle">Сумма и доля каждой статьи расходов по выбранному периоду</div></div><span class="muted">База: {{ expense_structure.base_label }}</span></div>
+<div class="summary"><span>Выручка: {{ money(expense_structure.revenue) }}</span><span>Всего расходов в структуре: {{ money(expense_structure.total_expenses) }}</span><span>Комиссия WB не вычитается повторно: она уже сидит в сумме к перечислению.</span></div>
+<div class="grid expense-grid" style="margin-top:12px">{% for row in expense_structure.rows[:10] %}<div class="card"><div class="label">{{ row.name }}</div><div class="value {{ row.cls }}">{{ money(row.amount) }}</div><div class="hint">{{ percent(row.share_revenue) }} от выручки · {{ percent(row.share_expenses) }} от расходов</div></div>{% endfor %}</div>
+<div class="expense-bars">{% for row in expense_structure.rows if row.amount > 0 %}<div class="expense-bar"><div><b>{{ row.name }}</b><div class="muted" style="font-size:12px">{{ row.hint }}</div></div><div class="expense-track"><div class="expense-fill" style="width:{{ '%.2f'|format(row.bar_width) }}%"></div></div><div class="expense-note">{{ money(row.amount) }} · {{ percent(row.display_share) }}</div></div>{% endfor %}</div>
+<div class="table-wrap" style="margin-top:14px"><table style="min-width:860px"><thead><tr><th>Статья</th><th>Сумма</th><th>% от выручки</th><th>% от всех расходов</th><th>Комментарий</th></tr></thead><tbody>{% for row in expense_structure.rows %}<tr><td>{{ row.name }}</td><td>{{ money(row.amount) }}</td><td>{{ percent(row.share_revenue) }}</td><td>{{ percent(row.share_expenses) }}</td><td class="muted">{{ row.hint }}</td></tr>{% endfor %}</tbody></table></div>
+<div class="hint">«Основное удержание WB» = доход покупателей − расчётная выплата WB. Это нужно для прозрачности: здесь обычно находится комиссия/вознаграждение WB. В чистую прибыль оно не вычитается второй раз, потому что расчёт уже идёт от выплаты WB.</div></div>
+
 <div class="section card"><div class="section-head"><div><h2>Динамика сохранённых отчётов</h2><div class="subtitle">Доход, прибыль до налога и чистая прибыль</div></div></div><div class="chart-box"><canvas id="trendChart"></canvas></div></div>
 <div class="section two-col"><div class="card"><div class="section-head"><h2>Товары выбранного периода</h2><span class="muted">{{ latest_period }}</span></div><div class="table-wrap"><table><thead><tr><th>Товар</th><th>Артикул</th><th>Шт.</th><th>Доход</th><th>Себес.</th><th>Внешние</th><th>Реклама</th><th>До налога</th><th>УСН</th><th>Чистая</th><th>Маржа</th></tr></thead><tbody>{% for row in skus %}<tr><td><a class="text-link" href="{{ url_for('product_detail', sku=row.sku, period_type=latest.period_type) }}">{{ row.name or row.sku }}</a></td><td class="muted">{{ row.sku }}</td><td>{{ units(row.units) }}</td><td>{{ money(row.revenue) }}</td><td>{{ money(row.cogs) }}</td><td>{{ money(row.external_expenses) }}</td><td>{{ money(row.advertising) }}</td><td class="{{ 'profit-pos' if row.profit_before_tax >= 0 else 'profit-neg' }}">{{ money(row.profit_before_tax) }}</td><td>{{ money(row.tax) }}</td><td class="{{ 'profit-pos' if row.profit >= 0 else 'profit-neg' }}">{{ money(row.profit) }}</td><td>{{ percent(row.margin) }}</td></tr>{% else %}<tr><td colspan="11" class="empty">В этом отчёте нет строк по товарам.</td></tr>{% endfor %}</tbody></table></div><div class="hint">Себестоимость и внешние расходы теперь редактируются прямо в разделе <b>«Себестоимость и расходы»</b>. После изменения прошлые отчёты пересчитываются командой <b>/backfill ДД.ММ.ГГГГ</b>.</div></div>
 <div class="card"><div class="section-head"><h2>Последние периоды</h2><span class="muted">Нажми на период</span></div><div class="table-wrap"><table style="min-width:760px"><thead><tr><th>Период</th><th>Тип</th><th>Доход</th><th>До налога</th><th>УСН</th><th>Чистая</th></tr></thead><tbody>{% for row in reports_desc %}<tr><td><a class="period-link" href="/?report_id={{ row.report_id }}{% if selected_type %}&period_type={{ selected_type }}{% endif %}">{{ period(row.period_start,row.period_end) }}</a></td><td class="muted">{{ type_label(row.period_type) }}</td><td>{{ money(row.revenue) }}</td><td class="{{ 'profit-pos' if row.profit_before_tax >= 0 else 'profit-neg' }}">{{ money(row.profit_before_tax) }}</td><td>{{ money(row.tax) }}</td><td class="{{ 'profit-pos' if row.profit >= 0 else 'profit-neg' }}">{{ money(row.profit) }}</td></tr>{% endfor %}</tbody></table></div></div></div>
@@ -869,6 +877,77 @@ def _operation_logistics_details(rows: list[Any]) -> tuple[dict[str, float], lis
     return totals, breakdown, sku_rows
 
 
+def _safe_abs(value: Any) -> float:
+    try:
+        return abs(float(value or 0.0))
+    except Exception:
+        return 0.0
+
+
+def _build_expense_structure(report: Any | None, rows: list[Any] | None = None, *, base: str = "revenue") -> SimpleNamespace:
+    """Prepare expense cards for dashboard.
+
+    Important: commission/primary WB withholding is calculated as revenue minus payout.
+    It is shown as an explanatory category and is NOT subtracted again from profit.
+    Separate WB expenses come from sale operation rows: logistics, storage, handling,
+    fines and other withholdings.
+    """
+    if report is None:
+        return SimpleNamespace(rows=[], total_expenses=0.0, revenue=0.0, base=base, base_label="—")
+
+    revenue = float(getattr(report, "revenue", 0.0) or 0.0)
+    payout = float(getattr(report, "payout", 0.0) or 0.0)
+    op_totals = None
+    if rows:
+        try:
+            op_totals, _breakdown, _sku_rows = _operation_logistics_details(rows)
+        except Exception:
+            op_totals = None
+
+    def op_amount(key: str) -> float:
+        if not op_totals:
+            return 0.0
+        return _safe_abs(op_totals.get(key, 0.0))
+
+    main_wb = max(revenue - payout, 0.0)
+    other_wb = op_amount("other") + op_amount("unallocated")
+    categories = [
+        ("Себестоимость", _safe_abs(getattr(report, "cogs", 0.0)), "Закупочная стоимость проданных товаров"),
+        ("Основное удержание WB", main_wb, "Разница между доходом и суммой к перечислению: здесь обычно сидит комиссия/вознаграждение WB"),
+        ("Логистика WB", op_amount("logistics_total"), "Доставка, обратная логистика и транспортные строки из фин. отчёта"),
+        ("Хранение", op_amount("storage"), "Хранение на складах WB"),
+        ("Приёмка", op_amount("handling"), "Платная приёмка и обработка"),
+        ("Реклама", _safe_abs(getattr(report, "advertising", 0.0)), "Расходы WB Продвижение"),
+        ("УСН / налоги", _safe_abs(getattr(report, "tax", 0.0)), "Налог с дохода по твоей ставке"),
+        ("Штрафы", op_amount("fines"), "Штрафы и санкции WB"),
+        ("Прочие WB", other_wb, "Прочие и неразложенные удержания WB"),
+        ("Внешние расходы", _safe_abs(getattr(report, "external_expenses", 0.0)), "Упаковка, доставка до МП, фулфилмент и другие расходы вне WB"),
+    ]
+    rows_out = []
+    total_expenses = sum(amount for _name, amount, _hint in categories if amount > 0)
+    for name, amount, hint in categories:
+        share_revenue = _div(amount, revenue)
+        share_expenses = _div(amount, total_expenses)
+        rows_out.append(SimpleNamespace(
+            name=name,
+            amount=amount,
+            share_revenue=share_revenue,
+            share_expenses=share_expenses,
+            display_share=share_expenses if base == "expenses" else share_revenue,
+            bar_width=max(0, min(100, (share_expenses if base == "expenses" else share_revenue) * 100)),
+            hint=hint,
+            cls="bad" if name in {"Штрафы"} and amount > 0 else "",
+        ))
+    rows_out.sort(key=lambda item: item.amount, reverse=True)
+    return SimpleNamespace(
+        rows=rows_out,
+        total_expenses=total_expenses,
+        revenue=revenue,
+        base=base,
+        base_label="от всех расходов" if base == "expenses" else "от выручки",
+    )
+
+
 def _query_int(name: str, default: int, *, minimum: int = 1, maximum: int = 365) -> int:
     raw = request.args.get(name, "").strip()
     if not raw:
@@ -1517,6 +1596,9 @@ def dashboard():
     selected_type = request.args.get("period_type", "").strip()
     if selected_type not in {"", "daily", "weekly", "xlsx"}:
         selected_type = ""
+    expense_base = request.args.get("expense_base", "revenue").strip()
+    if expense_base not in {"revenue", "expenses"}:
+        expense_base = "revenue"
     reports_desc = list_dashboard_reports(200, period_type=selected_type or None)
     latest = reports_desc[0] if reports_desc else None
     selected_report_id = request.args.get("report_id", "").strip()
@@ -1525,6 +1607,21 @@ def dashboard():
         if candidate is not None and (not selected_type or candidate.period_type == selected_type):
             latest = candidate
     skus = list_dashboard_skus(latest.report_id) if latest else []
+    expense_rows = []
+    if latest:
+        try:
+            expense_rows = list_sale_operations(
+                limit=5000,
+                period_type=latest.period_type,
+                date_from=latest.period_start,
+                date_to=latest.period_end,
+                query="",
+                operation_type="",
+            )
+        except Exception:
+            logger.exception("Could not load operations for expense structure")
+            expense_rows = []
+    expense_structure = _build_expense_structure(latest, expense_rows, base=expense_base)
     reports_asc = list(reversed(reports_desc))
     context: dict[str, Any] = {
         "title": os.getenv("DASHBOARD_TITLE", "WB Profit Dashboard").strip() or "WB Profit Dashboard",
@@ -1532,6 +1629,8 @@ def dashboard():
         "skus": skus,
         "reports_desc": reports_desc,
         "selected_type": selected_type,
+        "expense_base": expense_base,
+        "expense_structure": expense_structure,
         "chart_labels": [_period(r.period_start, r.period_end) for r in reports_asc],
         "chart_profit": [round(r.profit, 2) for r in reports_asc],
         "chart_pre_tax": [round(r.profit_before_tax, 2) for r in reports_asc],
