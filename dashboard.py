@@ -69,7 +69,7 @@ BASE_STYLE = r"""
 table{width:100%;border-collapse:collapse;min-width:1050px}th,td{padding:11px 10px;border-bottom:1px solid var(--line);text-align:right;font-size:12.5px;white-space:nowrap}th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--panel)}th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}tr:last-child td{border-bottom:0}.profit-pos{color:var(--good);font-weight:700}.profit-neg{color:var(--bad);font-weight:700}.muted{color:var(--muted)}.empty{padding:40px 20px;text-align:center;color:var(--muted)}.period-link,.text-link{color:var(--text);text-decoration:none;font-weight:650}.period-link:hover,.text-link:hover{color:#d6a7ff}.hint{margin-top:12px;padding:12px 14px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:12px;line-height:1.5}.notice{margin-bottom:14px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);font-size:13px}.notice.ok{background:rgba(61,220,151,.10);border-color:rgba(61,220,151,.28);color:#9af0c9}.notice.error{background:rgba(255,102,120,.10);border-color:rgba(255,102,120,.28);color:#ffadb7}.field{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}.field label{color:var(--muted);font-size:12px}.field input,.field textarea,.field select{width:100%}.form-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}.inline-actions{display:flex;gap:7px;justify-content:flex-end}.inline-actions form{margin:0}.small{font-size:11px;padding:7px 9px;border-radius:9px}.summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}.summary span{padding:8px 11px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--muted);font-size:12px}.expense-bars{display:grid;gap:9px;margin-top:14px}.expense-bar{display:grid;grid-template-columns:minmax(170px,.35fr) 1fr minmax(110px,.18fr);gap:10px;align-items:center}.expense-track{height:10px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;border:1px solid var(--line)}.expense-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--accent2))}.expense-note{color:var(--muted);font-size:12px;text-align:right}.expense-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.product-title{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.sku-chip{display:inline-flex;padding:7px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted);font-size:12px}.rank-good{color:var(--good);font-weight:750}.rank-bad{color:var(--bad);font-weight:750}.filters label{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}.filters label input,.filters label select{min-width:145px}footer{color:var(--muted);font-size:12px;text-align:center;padding:28px 0 10px}
 @media(max-width:1150px){.grid{grid-template-columns:repeat(3,1fr)}.two-col,.admin-cols{grid-template-columns:1fr}}@media(max-width:650px){.wrap{padding:16px}header{align-items:flex-start;flex-direction:column}.grid{grid-template-columns:repeat(2,1fr)}.card{padding:14px}.chart-box{height:300px}.form-grid>*{width:100%}}
 
-.sku-matrix-wrap{overflow:auto;border-radius:16px;border:1px solid var(--line);max-height:72vh}.sku-matrix{min-width:2350px;border-collapse:separate;border-spacing:0}.sku-matrix th,.sku-matrix td{font-size:12px;padding:9px 8px}.sku-matrix th{z-index:3}.sku-matrix .sticky-product{position:sticky;left:0;background:#141722;z-index:2;min-width:330px;text-align:left}.sku-matrix th.sticky-product{z-index:4}.sku-product-cell{display:flex;gap:10px;align-items:center}.sku-img{width:46px;height:60px;border-radius:10px;object-fit:cover;background:rgba(255,255,255,.06);border:1px solid var(--line)}.sku-name{font-weight:750;white-space:normal;line-height:1.25}.sku-meta{font-size:11px;color:var(--muted);margin-top:4px}.sku-matrix input,.sku-matrix select{width:105px;padding:7px 8px;border-radius:9px;font-size:12px}.sku-matrix select.warehouse-input{width:165px}.sku-matrix input.changed,.sku-matrix select.changed{border-color:rgba(224,64,251,.75);box-shadow:0 0 0 2px rgba(224,64,251,.12)}.sku-status{display:inline-flex;padding:5px 8px;border-radius:999px;font-weight:750}.sku-status.good{background:rgba(61,220,151,.12);color:var(--good);border:1px solid rgba(61,220,151,.3)}.sku-status.warn{background:rgba(255,204,102,.12);color:var(--warn);border:1px solid rgba(255,204,102,.35)}.sku-status.bad{background:rgba(255,102,120,.12);color:var(--bad);border:1px solid rgba(255,102,120,.35)}.matrix-toolbar{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}.matrix-toolbar .field{min-width:170px;margin-bottom:0}.matrix-impact.pos{color:var(--good);font-weight:750}.matrix-impact.neg{color:var(--bad);font-weight:750}.matrix-mode-badge{font-size:12px;color:var(--muted);padding:7px 10px;border:1px dashed var(--line);border-radius:999px}
+.sku-matrix-wrap{overflow:auto;border-radius:16px;border:1px solid var(--line);max-height:72vh}.sku-matrix{min-width:2350px;border-collapse:separate;border-spacing:0}.sku-matrix th,.sku-matrix td{font-size:12px;padding:9px 8px}.sku-matrix th{z-index:3}.sku-matrix .sticky-product{position:sticky;left:0;background:#141722;z-index:2;min-width:330px;text-align:left}.sku-matrix th.sticky-product{z-index:4}.sku-product-cell{display:flex;gap:10px;align-items:center}.sku-img{width:46px;height:60px;border-radius:10px;object-fit:cover;background:rgba(255,255,255,.06);border:1px solid var(--line)}.sku-name{font-weight:750;white-space:normal;line-height:1.25}.sku-meta{font-size:11px;color:var(--muted);margin-top:4px}.sku-matrix input,.sku-matrix select{width:105px;padding:7px 8px;border-radius:9px;font-size:12px}.sku-matrix select.warehouse-input{width:165px}.sku-matrix input.changed,.sku-matrix select.changed{border-color:rgba(224,64,251,.75);box-shadow:0 0 0 2px rgba(224,64,251,.12)}.sku-status{display:inline-flex;padding:5px 8px;border-radius:999px;font-weight:750}.sku-status.good{background:rgba(61,220,151,.12);color:var(--good);border:1px solid rgba(61,220,151,.3)}.sku-status.warn{background:rgba(255,204,102,.12);color:var(--warn);border:1px solid rgba(255,204,102,.35)}.sku-status.bad{background:rgba(255,102,120,.12);color:var(--bad);border:1px solid rgba(255,102,120,.35)}.matrix-toolbar{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}.matrix-toolbar .field{min-width:170px;margin-bottom:0}.matrix-impact.pos{color:var(--good);font-weight:750}.matrix-impact.neg{color:var(--bad);font-weight:750}.matrix-mode-badge{font-size:12px;color:var(--muted);padding:7px 10px;border:1px dashed var(--line);border-radius:999px}.scenario-select{min-width:230px}.volume-cell{font-weight:750;color:#cbd2df}.wb-link{display:inline-flex;gap:4px;align-items:center}.compare-panel{margin-top:10px;padding:12px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:12px}.compare-panel b{color:var(--text)}
 
 </style>
 """
@@ -113,37 +113,61 @@ PRODUCTS_TEMPLATE = r"""
 
 UNIT_MATRIX_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>SKU-юнитка · WB Profit</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
-<header><div><h1>Интерактивная юнит-экономика по SKU</h1><div class="subtitle">Excel-like таблица: цена с СПП, схема FBS/FBW, ручные FBS-склады, тарифы, фото и ссылки WB прямо в строке</div></div><div class="badge">Факт + сценарии · v38</div></header>
+<header><div><h1>Интерактивная юнит-экономика по SKU</h1><div class="subtitle">Excel-like таблица: цена с СПП, схема FBS/FBW, ручные FBS-склады, тарифы, фото и ссылки WB прямо в строке</div></div><div class="badge">Факт + сценарии · v39</div></header>
 <nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a class="active" href="/unit-matrix">SKU-юнитка</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><label>Период<select name="period_type"><option value="actual" {% if selected_type == 'actual' %}selected{% endif %}>Актуально без дублей</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select></label><label>С даты<input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату<input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск<input name="q" value="{{ query }}" placeholder="товар / артикул / nmID"></label><label>Целевая маржа, %<input id="targetMarginInput" name="target_margin" inputmode="decimal" value="{{ target_margin_input }}"></label><button type="submit">Показать</button></form>
 <div class="hint">Фактический режим показывает базовую юнит-экономику из сохранённых отчётов. Изменения в таблице — это <b>сценарий</b>: они не затирают данные WB и не меняют себестоимость в базе, пока ты отдельно не сохранишь её в разделе «Себестоимость и расходы».</div>
 {% if tariff_warning %}<div class="notice error">{{ tariff_warning }}</div>{% endif %}
 <div class="section card"><div class="section-head"><div><h2>Управление сценарием</h2><div class="subtitle">Меняй ячейки — прибыль, маржа, ROI и минимальная цена пересчитаются сразу без перезагрузки</div></div><span id="scenarioStatus" class="matrix-mode-badge">Фактическая база</span></div>
-<div class="matrix-toolbar"><div class="field"><label>Фильтр категории</label><select id="filterCategory"><option value="">Все</option>{% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select></div><div class="field"><label>Фильтр бренда</label><select id="filterBrand"><option value="">Все</option>{% for b in brands %}<option value="{{ b }}">{{ b }}</option>{% endfor %}</select></div><div class="field"><label>Фильтр склада</label><select id="filterWarehouse"><option value="">Все</option>{% for wh in warehouse_options %}<option value="{{ wh }}">{{ wh }}</option>{% endfor %}</select></div><div class="field"><label>Статус</label><select id="filterStatus"><option value="">Все</option><option value="good">Прибыльный</option><option value="warn">На грани</option><option value="bad">Убыточный</option></select></div><div class="field"><label>Мин. маржа, %</label><input id="filterMargin" inputmode="decimal" placeholder="например 10"></div><button type="button" class="secondary" id="saveScenarioBtn">Сохранить сценарий</button><button type="button" class="secondary" id="resetScenarioBtn">Сбросить изменения</button><button type="button" class="secondary" id="restoreWbBtn">Вернуть данные из WB</button><button type="button" id="compareBtn">Сравнить с базой</button></div></div>
+<div class="matrix-toolbar"><div class="field"><label>Фильтр категории</label><select id="filterCategory"><option value="">Все</option>{% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select></div><div class="field"><label>Фильтр бренда</label><select id="filterBrand"><option value="">Все</option>{% for b in brands %}<option value="{{ b }}">{{ b }}</option>{% endfor %}</select></div><div class="field"><label>Фильтр склада</label><select id="filterWarehouse"><option value="">Все</option>{% for wh in warehouse_options %}<option value="{{ wh }}">{{ wh }}</option>{% endfor %}</select></div><div class="field"><label>Статус</label><select id="filterStatus"><option value="">Все</option><option value="good">Прибыльный</option><option value="warn">На грани</option><option value="bad">Убыточный</option></select></div><div class="field"><label>Мин. маржа, %</label><input id="filterMargin" inputmode="decimal" placeholder="например 10"></div></div>
+<div class="matrix-toolbar" style="margin-top:10px"><div class="field"><label>Название сценария</label><input id="scenarioName" placeholder="Например: Краснодар · ДРР 15%"></div><button type="button" class="secondary" id="saveScenarioBtn">Сохранить сценарий</button><div class="field"><label>Загрузить сценарий</label><select id="scenarioSelect" class="scenario-select"><option value="">— сохранённые сценарии —</option></select></div><button type="button" class="secondary" id="loadScenarioBtn">Загрузить</button><button type="button" class="danger" id="deleteScenarioBtn">Удалить</button><div class="field"><label>Сравнить с другим</label><select id="compareScenarioSelect" class="scenario-select"><option value="">— выбрать сценарий —</option></select></div><button type="button" id="compareScenarioBtn">Сравнить сценарии</button><button type="button" class="secondary" id="resetScenarioBtn">Сбросить изменения</button><button type="button" class="secondary" id="restoreWbBtn">Вернуть данные из WB</button><button type="button" id="compareBtn">Сравнить с базой</button></div><div id="scenarioCompare" class="compare-panel" style="display:none"></div></div>
 <div class="grid section"><div class="card"><div class="label">SKU в таблице</div><div class="value" id="visibleCount">{{ rows|length }}</div></div><div class="card"><div class="label">Сценарная прибыль</div><div class="value good" id="totalProfit">0 ₽</div></div><div class="card"><div class="label">Влияние на прибыль</div><div class="value" id="totalImpact">0 ₽</div></div><div class="card"><div class="label">Средняя маржа</div><div class="value" id="avgMargin">0%</div></div><div class="card"><div class="label">Убыточных / на грани</div><div class="value" id="badCount">0 / 0</div></div></div>
-<div class="section card"><div class="section-head"><div><h2>Таблица SKU</h2><div class="subtitle">Первая колонка закреплена. Цена считается как в калькуляторе юнитки: вводишь цену для покупателя с СПП и СПП %, система считает цену до СПП. Склад выбирается прямо в строке; для FBS можно выбрать ручной СЦ, например СЦ Владикавказ.</div></div><span class="muted">{{ period_label }}</span></div><div class="sku-matrix-wrap"><table class="sku-matrix" id="unitMatrix"><thead><tr><th class="sticky-product">Товар</th><th>Артикул WB / SKU</th><th>SKU / размер / цвет</th><th>Категория</th><th>Схема</th><th>Цена с СПП</th><th>СПП, %</th><th>Цена до СПП</th><th>Себестоимость</th><th>Комиссия WB, %</th><th>Комиссия WB, ₽</th><th>Склад</th><th>Логистика, ₽</th><th>Хранение, ₽</th><th>Реклама / ДРР</th><th>Налог, %</th><th>Прочие расходы</th><th>Чистая прибыль, ₽</th><th>Маржа, %</th><th>ROI, %</th><th>Точка безуб.</th><th>Мин. цена</th><th>Цена для маржи</th><th>Влияние</th><th>Статус</th></tr></thead><tbody>
-{% for row in rows %}<tr data-row='{{ row.json|safe }}' data-category="{{ row.category }}" data-brand="{{ row.brand }}"><td class="sticky-product"><div class="sku-product-cell"><a href="{{ row.product_url }}" target="_blank" rel="noopener"><img class="sku-img" src="{{ row.photo_url }}" onerror="this.style.display='none'"></a><div><div class="sku-name">{% if row.product_url %}<a class="text-link" href="{{ row.product_url }}" target="_blank" rel="noopener">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</div><div class="sku-meta">nmID {{ row.nm_id or '—' }} · факт: {{ units(row.units) }} шт.{% if row.product_url %} · <a class="text-link" href="{{ row.product_url }}" target="_blank" rel="noopener">открыть WB</a>{% endif %}</div></div></div></td><td>{{ row.sku }}</td><td class="muted">{{ row.variant }}</td><td>{{ row.category }}</td><td><select class="js-field scheme-input" data-key="scheme"><option value="fbs">FBS</option><option value="fbw">FBW</option></select></td><td><input class="js-field" data-key="priceSpp" inputmode="decimal"></td><td><input class="js-field" data-key="sppPct" inputmode="decimal"></td><td class="js-priceBeforeSpp">0 ₽</td><td><input class="js-field" data-key="cost" inputmode="decimal"></td><td><input class="js-field" data-key="commissionPct" inputmode="decimal"></td><td class="js-commissionRub">0 ₽</td><td><select class="js-field warehouse-input" data-key="warehouse"><option value="">—</option>{% for wh in warehouse_options %}<option value="{{ wh }}">{{ wh }}</option>{% endfor %}<option value="__fbs_vladikavkaz__">СЦ Владикавказ · ручной FBS</option><option value="__fbs_manual__">Мой FBS-склад вручную</option></select></td><td><input class="js-field" data-key="logistics" inputmode="decimal"></td><td><input class="js-field" data-key="storage" inputmode="decimal"></td><td><input class="js-field" data-key="drr" inputmode="decimal"></td><td><input class="js-field" data-key="taxPct" inputmode="decimal"></td><td><input class="js-field" data-key="other" inputmode="decimal"></td><td class="js-profit">0 ₽</td><td class="js-margin">0%</td><td class="js-roi">0%</td><td class="js-breakEven">0 ₽</td><td class="js-minPrice">0 ₽</td><td class="js-targetPrice">0 ₽</td><td class="js-impact matrix-impact">0 ₽</td><td><span class="sku-status js-status">—</span></td></tr>{% else %}<tr><td colspan="25" class="empty">Нет товаров за выбранный период.</td></tr>{% endfor %}
-</tbody></table></div><div class="hint">Формула сценария: цена до СПП = цена для покупателя / (1 − СПП%). Комиссия WB, ДРР и налог считаются от цены до СПП, поэтому СПП не уводит расчёт в минус как отдельный расход. Для FBS-СЦ, которых нет в тарифах WB, выбирай ручной склад и вводи тарифы в ячейках логистики/хранения.</div></div>
+<div class="section card"><div class="section-head"><div><h2>Таблица SKU</h2><div class="subtitle">Первая колонка закреплена. Цена считается как в калькуляторе юнитки: вводишь цену для покупателя с СПП и СПП %, система считает цену до СПП. Склад выбирается прямо в строке; для FBS можно выбрать ручной СЦ, например СЦ Владикавказ.</div></div><span class="muted">{{ period_label }}</span></div><div class="sku-matrix-wrap"><table class="sku-matrix" id="unitMatrix"><thead><tr><th class="sticky-product">Товар</th><th>Артикул WB / SKU</th><th>SKU / размер / цвет</th><th>Категория</th><th>Схема</th><th>Цена с СПП</th><th>СПП, %</th><th>Цена до СПП</th><th>Себестоимость</th><th>Комиссия WB, %</th><th>Комиссия WB, ₽</th><th>Склад</th><th>Длина, см</th><th>Ширина, см</th><th>Высота, см</th><th>Объём, л</th><th>Логистика, ₽</th><th>Хранение, ₽</th><th>Реклама / ДРР</th><th>Налог, %</th><th>Прочие расходы</th><th>Чистая прибыль, ₽</th><th>Маржа, %</th><th>ROI, %</th><th>Точка безуб.</th><th>Мин. цена</th><th>Цена для маржи</th><th>Влияние</th><th>Статус</th></tr></thead><tbody>
+{% for row in rows %}<tr data-row='{{ row.json|safe }}' data-category="{{ row.category }}" data-brand="{{ row.brand }}"><td class="sticky-product"><div class="sku-product-cell"><a href="{{ row.product_url }}" target="_blank" rel="noopener"><img class="sku-img" src="{{ row.photo_url }}" onerror="this.style.display='none'"></a><div><div class="sku-name">{% if row.product_url %}<a class="text-link" href="{{ row.product_url }}" target="_blank" rel="noopener">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</div><div class="sku-meta">nmID {{ row.nm_id or '—' }} · факт: {{ units(row.units) }} шт.{% if row.product_url %} · <a class="text-link" href="{{ row.product_url }}" target="_blank" rel="noopener">открыть WB</a>{% endif %}</div></div></div></td><td>{{ row.sku }}</td><td class="muted">{{ row.variant }}</td><td>{{ row.category }}</td><td><select class="js-field scheme-input" data-key="scheme"><option value="fbs">FBS</option><option value="fbw">FBW</option></select></td><td><input class="js-field" data-key="priceSpp" inputmode="decimal"></td><td><input class="js-field" data-key="sppPct" inputmode="decimal"></td><td class="js-priceBeforeSpp">0 ₽</td><td><input class="js-field" data-key="cost" inputmode="decimal"></td><td><input class="js-field" data-key="commissionPct" inputmode="decimal"></td><td class="js-commissionRub">0 ₽</td><td><select class="js-field warehouse-input" data-key="warehouse"><option value="">—</option>{% for wh in warehouse_options %}<option value="{{ wh }}">{{ wh }}</option>{% endfor %}<option value="__fbs_vladikavkaz__">СЦ Владикавказ · ручной FBS</option><option value="__fbs_manual__">Мой FBS-склад вручную</option></select></td><td><input class="js-field dimension-input" data-key="lengthCm" inputmode="decimal"></td><td><input class="js-field dimension-input" data-key="widthCm" inputmode="decimal"></td><td><input class="js-field dimension-input" data-key="heightCm" inputmode="decimal"></td><td class="js-volume volume-cell">0</td><td><input class="js-field" data-key="logistics" inputmode="decimal"></td><td><input class="js-field" data-key="storage" inputmode="decimal"></td><td><input class="js-field" data-key="drr" inputmode="decimal"></td><td><input class="js-field" data-key="taxPct" inputmode="decimal"></td><td><input class="js-field" data-key="other" inputmode="decimal"></td><td class="js-profit">0 ₽</td><td class="js-margin">0%</td><td class="js-roi">0%</td><td class="js-breakEven">0 ₽</td><td class="js-minPrice">0 ₽</td><td class="js-targetPrice">0 ₽</td><td class="js-impact matrix-impact">0 ₽</td><td><span class="sku-status js-status">—</span></td></tr>{% else %}<tr><td colspan="29" class="empty">Нет товаров за выбранный период.</td></tr>{% endfor %}
+</tbody></table></div><div class="hint">Формула сценария: цена до СПП = цена для покупателя / (1 − СПП%). Комиссия WB, ДРР и налог считаются от цены до СПП, поэтому СПП не уводит расчёт в минус как отдельный расход. Для FBS-СЦ, которых нет в тарифах WB, выбирай ручной склад и вводи тарифы в ячейках логистики/хранения. Габариты считаются как Д×Ш×В/1000; логистика и хранение по тарифу WB пересчитываются от объёма с округлением вверх до литра.</div></div>
 <script>
 const tariffMaps = {{ tariff_maps|tojson }};
+const initialScenarios = {{ matrix_scenarios|tojson }};
 const moneyFmt = new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2});
 const num = (v)=>{ if(v===null||v===undefined) return 0; if(typeof v==='number') return v; const s=String(v).replace(/\s/g,'').replace('%','').replace(',','.'); const n=parseFloat(s); return Number.isFinite(n)?n:0; };
 const money = (v)=> moneyFmt.format(v).replace(',', '.') + ' ₽';
 const pct = (v)=> (Math.round(v*10)/10).toString().replace('.', ',') + '%';
 const rows = Array.from(document.querySelectorAll('#unitMatrix tbody tr[data-row]'));
+let savedScenarios = initialScenarios || [];
 function setInput(tr,key,value){ const el=tr.querySelector(`[data-key="${key}"]`); if(!el) return; el.value = (typeof value === 'number') ? (Math.round(value*100)/100).toString().replace('.', ',') : (value||''); el.dataset.base = el.value; }
-function hydrate(){ rows.forEach(tr=>{ const d=JSON.parse(tr.dataset.row); tr._base=d; setInput(tr,'scheme',d.scheme||'fbs'); setInput(tr,'priceSpp',d.priceSpp ?? d.price); setInput(tr,'sppPct',(d.sppPct||0)*100); setInput(tr,'cost',d.cost); setInput(tr,'commissionPct',d.commissionPct*100); setInput(tr,'warehouse',d.warehouse||''); setInput(tr,'logistics',d.logistics); setInput(tr,'storage',d.storage); setInput(tr,'drr',d.drr*100); setInput(tr,'taxPct',d.taxPct*100); setInput(tr,'other',d.other); recalcRow(tr); }); applyFilters(); }
-function values(tr){ const priceSpp=num(tr.querySelector('[data-key="priceSpp"]').value); const sppPct=num(tr.querySelector('[data-key="sppPct"]').value)/100; const denom=Math.max(0.0001,1-sppPct); const priceBeforeSpp=priceSpp/denom; return {scheme:tr.querySelector('[data-key="scheme"]').value || 'fbs', priceSpp, sppPct, price:priceBeforeSpp, cost:num(tr.querySelector('[data-key="cost"]').value), commissionPct:num(tr.querySelector('[data-key="commissionPct"]').value)/100, warehouse:tr.querySelector('[data-key="warehouse"]').value, logistics:num(tr.querySelector('[data-key="logistics"]').value), storage:num(tr.querySelector('[data-key="storage"]').value), drr:num(tr.querySelector('[data-key="drr"]').value)/100, taxPct:num(tr.querySelector('[data-key="taxPct"]').value)/100, other:num(tr.querySelector('[data-key="other"]').value)}; }
+function volumeLiters(v){ return Math.max(0,(v.lengthCm||0)*(v.widthCm||0)*(v.heightCm||0)/1000); }
+function chargeLiters(vol){ return Math.max(1, Math.ceil(vol || 0)); }
+function hydrate(){ rows.forEach(tr=>{ const d=JSON.parse(tr.dataset.row); tr._base=d; setInput(tr,'scheme',d.scheme||'fbs'); setInput(tr,'priceSpp',d.priceSpp ?? d.price); setInput(tr,'sppPct',(d.sppPct||0)*100); setInput(tr,'cost',d.cost); setInput(tr,'commissionPct',d.commissionPct*100); setInput(tr,'warehouse',d.warehouse||''); setInput(tr,'lengthCm',d.lengthCm||0); setInput(tr,'widthCm',d.widthCm||0); setInput(tr,'heightCm',d.heightCm||0); setInput(tr,'logistics',d.logistics); setInput(tr,'storage',d.storage); setInput(tr,'drr',d.drr*100); setInput(tr,'taxPct',d.taxPct*100); setInput(tr,'other',d.other); recalcRow(tr); }); applyFilters(); renderScenarioSelects(); }
+function values(tr){ const priceSpp=num(tr.querySelector('[data-key="priceSpp"]').value); const sppPct=num(tr.querySelector('[data-key="sppPct"]').value)/100; const denom=Math.max(0.0001,1-sppPct); const priceBeforeSpp=priceSpp/denom; const lengthCm=num(tr.querySelector('[data-key="lengthCm"]')?.value); const widthCm=num(tr.querySelector('[data-key="widthCm"]')?.value); const heightCm=num(tr.querySelector('[data-key="heightCm"]')?.value); return {scheme:tr.querySelector('[data-key="scheme"]').value || 'fbs', priceSpp, sppPct, price:priceBeforeSpp, cost:num(tr.querySelector('[data-key="cost"]').value), commissionPct:num(tr.querySelector('[data-key="commissionPct"]').value)/100, warehouse:tr.querySelector('[data-key="warehouse"]').value, lengthCm, widthCm, heightCm, volume: Math.max(0,lengthCm*widthCm*heightCm/1000), logistics:num(tr.querySelector('[data-key="logistics"]').value), storage:num(tr.querySelector('[data-key="storage"]').value), drr:num(tr.querySelector('[data-key="drr"]').value)/100, taxPct:num(tr.querySelector('[data-key="taxPct"]').value)/100, other:num(tr.querySelector('[data-key="other"]').value)}; }
 function calc(v,targetMargin){ const commissionRub=v.price*v.commissionPct; const adRub=v.price*v.drr; const taxRub=v.price*v.taxPct; const profit=v.price-v.cost-commissionRub-v.logistics-v.storage-adRub-taxRub-v.other; const margin=v.price?profit/v.price*100:0; const roi=v.cost?profit/v.cost*100:0; const fixed=v.cost+v.logistics+v.storage+v.other; const variable=v.commissionPct+v.drr+v.taxPct; const breakEven=(1-variable)>0.0001?fixed/(1-variable):0; const targetPrice=(1-variable-targetMargin)>0.0001?fixed/(1-variable-targetMargin):0; return {commissionRub,adRub,taxRub,profit,margin,roi,breakEven,minPrice:breakEven,targetPrice}; }
-function recalcRow(tr){ const targetMargin=num(document.getElementById('targetMarginInput').value)/100; const v=values(tr); const c=calc(v,targetMargin); const base=tr._base||{}; const impact=c.profit-(base.baseProfit??0); tr.querySelector('.js-priceBeforeSpp').textContent=money(v.price); tr.querySelector('.js-commissionRub').textContent=money(c.commissionRub); tr.querySelector('.js-profit').textContent=money(c.profit); tr.querySelector('.js-profit').className='js-profit '+(c.profit>=0?'profit-pos':'profit-neg'); tr.querySelector('.js-margin').textContent=pct(c.margin); tr.querySelector('.js-margin').className='js-margin '+(c.margin>=10?'profit-pos':c.margin>=0?'value warn':'profit-neg'); tr.querySelector('.js-roi').textContent=pct(c.roi); tr.querySelector('.js-breakEven').textContent=money(c.breakEven); tr.querySelector('.js-minPrice').textContent=money(c.minPrice); tr.querySelector('.js-targetPrice').textContent=money(c.targetPrice); tr.querySelector('.js-impact').textContent=(impact>=0?'+':'')+money(impact); tr.querySelector('.js-impact').className='js-impact matrix-impact '+(impact>=0?'pos':'neg'); const st=tr.querySelector('.js-status'); let status='Прибыльный', cls='good'; if(c.profit<0){status='Убыточный';cls='bad'} else if(c.margin<5){status='На грани';cls='warn'} st.textContent=status; st.className='sku-status js-status '+cls; tr.dataset.status=cls; tr.dataset.margin=String(c.margin); tr.dataset.warehouse=v.warehouse; tr.dataset.scheme=v.scheme; tr._calc=c; tr.querySelectorAll('.js-field').forEach(el=>{el.classList.toggle('changed', String(el.value)!==String(el.dataset.base||''));}); }
+function recalcRow(tr){ const targetMargin=num(document.getElementById('targetMarginInput').value)/100; const v=values(tr); const c=calc(v,targetMargin); const base=tr._base||{}; const impact=c.profit-(base.baseProfit??0); tr.querySelector('.js-volume').textContent=(Math.round(v.volume*1000)/1000).toString().replace('.', ','); tr.querySelector('.js-priceBeforeSpp').textContent=money(v.price); tr.querySelector('.js-commissionRub').textContent=money(c.commissionRub); tr.querySelector('.js-profit').textContent=money(c.profit); tr.querySelector('.js-profit').className='js-profit '+(c.profit>=0?'profit-pos':'profit-neg'); tr.querySelector('.js-margin').textContent=pct(c.margin); tr.querySelector('.js-margin').className='js-margin '+(c.margin>=10?'profit-pos':c.margin>=0?'value warn':'profit-neg'); tr.querySelector('.js-roi').textContent=pct(c.roi); tr.querySelector('.js-breakEven').textContent=money(c.breakEven); tr.querySelector('.js-minPrice').textContent=money(c.minPrice); tr.querySelector('.js-targetPrice').textContent=money(c.targetPrice); tr.querySelector('.js-impact').textContent=(impact>=0?'+':'')+money(impact); tr.querySelector('.js-impact').className='js-impact matrix-impact '+(impact>=0?'pos':'neg'); const st=tr.querySelector('.js-status'); let status='Прибыльный', cls='good'; if(c.profit<0){status='Убыточный';cls='bad'} else if(c.margin<5){status='На грани';cls='warn'} st.textContent=status; st.className='sku-status js-status '+cls; tr.dataset.status=cls; tr.dataset.margin=String(c.margin); tr.dataset.warehouse=v.warehouse; tr.dataset.scheme=v.scheme; tr._calc=c; tr.querySelectorAll('.js-field').forEach(el=>{el.classList.toggle('changed', String(el.value)!==String(el.dataset.base||''));}); }
 function recalcAll(){ rows.forEach(recalcRow); updateTotals(); applyFilters(false); }
-function updateTotals(){ let visible=0, profit=0, impact=0, revenue=0, bad=0, warn=0; rows.forEach(tr=>{ if(tr.style.display==='none') return; visible++; const c=tr._calc||{}; const v=values(tr); profit+=c.profit||0; impact+=(c.profit-(tr._base?.baseProfit||0)); revenue+=v.price; if(tr.dataset.status==='bad') bad++; if(tr.dataset.status==='warn') warn++;}); document.getElementById('visibleCount').textContent=visible; document.getElementById('totalProfit').textContent=money(profit); document.getElementById('totalImpact').textContent=(impact>=0?'+':'')+money(impact); document.getElementById('totalImpact').className='value '+(impact>=0?'good':'bad'); document.getElementById('avgMargin').textContent=pct(revenue?profit/revenue*100:0); document.getElementById('badCount').textContent=`${bad} / ${warn}`; }
-function applyTariff(tr){ const v=values(tr); if(v.warehouse==='__fbs_vladikavkaz__' || v.warehouse==='__fbs_manual__') { recalcRow(tr); updateTotals(); return; } const map=tariffMaps[v.scheme] || {}; const t=map[v.warehouse]; if(!t) return; const log=tr.querySelector('[data-key="logistics"]'); const st=tr.querySelector('[data-key="storage"]'); log.value=String(Math.round((t.base||0)*100)/100).replace('.', ','); st.value=String(Math.round((t.storage||0)*100)/100).replace('.', ','); recalcRow(tr); updateTotals(); }
+function aggregateTotals(sourceRows=rows){ let visible=0, profit=0, impact=0, revenue=0, bad=0, warn=0; sourceRows.forEach(tr=>{ if(tr.style.display==='none') return; visible++; const c=tr._calc||{}; const v=values(tr); profit+=c.profit||0; impact+=(c.profit-(tr._base?.baseProfit||0)); revenue+=v.price; if(tr.dataset.status==='bad') bad++; if(tr.dataset.status==='warn') warn++;}); return {visible,profit,impact,revenue,bad,warn,margin:revenue?profit/revenue*100:0}; }
+function updateTotals(){ const t=aggregateTotals(); document.getElementById('visibleCount').textContent=t.visible; document.getElementById('totalProfit').textContent=money(t.profit); document.getElementById('totalImpact').textContent=(t.impact>=0?'+':'')+money(t.impact); document.getElementById('totalImpact').className='value '+(t.impact>=0?'good':'bad'); document.getElementById('avgMargin').textContent=pct(t.margin); document.getElementById('badCount').textContent=`${t.bad} / ${t.warn}`; }
+function tariffFor(v){ if(v.warehouse==='__fbs_vladikavkaz__' || v.warehouse==='__fbs_manual__') return null; const map=tariffMaps[v.scheme] || {}; return map[v.warehouse] || null; }
+function applyTariff(tr){ const v=values(tr); const t=tariffFor(v); if(!t) { recalcRow(tr); updateTotals(); return; } const liters=chargeLiters(v.volume); const logRub=(t.base||0) + Math.max(0,liters-1)*(t.liter||0); const storageRub=(t.storageBase||0) + Math.max(0,liters-1)*(t.storageLiter||0); const log=tr.querySelector('[data-key="logistics"]'); const st=tr.querySelector('[data-key="storage"]'); log.value=String(Math.round(logRub*100)/100).replace('.', ','); st.value=String(Math.round(storageRub*100)/100).replace('.', ','); recalcRow(tr); updateTotals(); }
 function applyFilters(doTotals=true){ const fc=document.getElementById('filterCategory').value, fb=document.getElementById('filterBrand').value, fw=document.getElementById('filterWarehouse').value, fs=document.getElementById('filterStatus').value, fm=num(document.getElementById('filterMargin').value); rows.forEach(tr=>{let ok=true; if(fc&&tr.dataset.category!==fc) ok=false; if(fb&&tr.dataset.brand!==fb) ok=false; if(fw&&tr.dataset.warehouse!==fw) ok=false; if(fs&&tr.dataset.status!==fs) ok=false; if(fm&&num(tr.dataset.margin)<fm) ok=false; tr.style.display=ok?'':'none';}); if(doTotals) updateTotals(); }
-document.addEventListener('input',e=>{ if(e.target.classList.contains('js-field')){ const tr=e.target.closest('tr'); recalcRow(tr); updateTotals(); } if(['filterMargin'].includes(e.target.id)) applyFilters(); });
+function currentPayload(){ return {version:39, savedAt:new Date().toISOString(), targetMargin:num(document.getElementById('targetMarginInput').value), rows:rows.map(tr=>({sku:tr._base.sku, nmId:tr._base.nmId, name:tr.querySelector('.sku-name')?.textContent?.trim()||tr._base.sku, values:values(tr), calc:tr._calc, baseProfit:tr._base.baseProfit||0}))}; }
+function renderScenarioSelects(){ const selects=[document.getElementById('scenarioSelect'), document.getElementById('compareScenarioSelect')]; selects.forEach(sel=>{ if(!sel) return; const cur=sel.value; sel.innerHTML='<option value="">— выбрать сценарий —</option>' + savedScenarios.map(x=>`<option value="${x.id}">${escapeHtml(x.name)} · ${escapeHtml(x.updated_at||'')}</option>`).join(''); sel.value=cur; }); }
+function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+async function api(url, options={}){ const resp=await fetch(url,{headers:{'Content-Type':'application/json'},...options}); if(!resp.ok){let msg='Ошибка запроса'; try{msg=(await resp.json()).error||msg}catch(e){} throw new Error(msg)} if(resp.status===204) return {}; return await resp.json(); }
+async function loadScenarioList(){ try{ const data=await api('/api/unit-matrix-scenarios'); savedScenarios=data.items||[]; renderScenarioSelects(); }catch(e){ document.getElementById('scenarioStatus').textContent='Не удалось загрузить сценарии: '+e.message; } }
+function applyScenarioPayload(payload){ if(!payload || !payload.rows) return; const bySku=new Map(payload.rows.map(r=>[String(r.sku||'').toLowerCase(), r.values||{}])); rows.forEach(tr=>{ const v=bySku.get(String(tr._base.sku||'').toLowerCase()); if(!v) return; Object.entries(v).forEach(([k,val])=>{ if(k==='price') return; const el=tr.querySelector(`[data-key="${k}"]`); if(el){ el.value=(typeof val==='number')?(Math.round(val*100)/100).toString().replace('.', ','):(val||''); } }); recalcRow(tr); }); updateTotals(); applyFilters(false); }
+async function getScenario(id){ return await api('/api/unit-matrix-scenarios/'+id); }
+function scenarioTotals(payload){ if(!payload || !payload.rows) return {profit:0,revenue:0,margin:0,bad:0,warn:0}; let profit=0,revenue=0,bad=0,warn=0; payload.rows.forEach(r=>{ const c=r.calc||{}; const v=r.values||{}; profit+=num(c.profit); revenue+=num(v.price); if(num(c.profit)<0) bad++; else if(num(c.margin)<5) warn++; }); return {profit,revenue,margin:revenue?profit/revenue*100:0,bad,warn}; }
+function showCompare(title, a, b){ const ta=scenarioTotals(a), tb=scenarioTotals(b); const diff=ta.profit-tb.profit; const el=document.getElementById('scenarioCompare'); el.style.display='block'; el.innerHTML=`<b>${escapeHtml(title)}</b><br>Сценарий: <b>${money(ta.profit)}</b>, маржа ${pct(ta.margin)} · База/сравнение: <b>${money(tb.profit)}</b>, маржа ${pct(tb.margin)} · Разница: <b class="${diff>=0?'profit-pos':'profit-neg'}">${diff>=0?'+':''}${money(diff)}</b>`; }
+document.addEventListener('input',e=>{ if(e.target.classList.contains('js-field')){ const tr=e.target.closest('tr'); if(e.target.classList.contains('dimension-input')) applyTariff(tr); else {recalcRow(tr); updateTotals();} } if(['filterMargin'].includes(e.target.id)) applyFilters(); });
 document.addEventListener('change',e=>{ if(e.target.classList.contains('warehouse-input') || e.target.classList.contains('scheme-input')) applyTariff(e.target.closest('tr')); if(e.target.id && e.target.id.startsWith('filter')) applyFilters(); });
 document.getElementById('targetMarginInput').addEventListener('input', recalcAll);
-document.getElementById('resetScenarioBtn').onclick=()=>{hydrate(); document.getElementById('scenarioStatus').textContent='Изменения сброшены';};
+document.getElementById('resetScenarioBtn').onclick=()=>{hydrate(); document.getElementById('scenarioStatus').textContent='Изменения сброшены'; document.getElementById('scenarioCompare').style.display='none';};
+document.getElementById('restoreWbBtn').onclick=()=>{hydrate(); document.getElementById('scenarioStatus').textContent='Вернули фактическую базу WB'; document.getElementById('scenarioCompare').style.display='none';};
+document.getElementById('compareBtn').onclick=()=>{updateTotals(); const base={rows:rows.map(tr=>({sku:tr._base.sku, values:{price:tr._base.price}, calc:{profit:tr._base.baseProfit, margin:0}}))}; showCompare('Сравнение с фактической базой WB', currentPayload(), base); document.getElementById('scenarioStatus').textContent='Сравнение с базой активно';};
+document.getElementById('saveScenarioBtn').onclick=async()=>{ const name=(document.getElementById('scenarioName').value||prompt('Название сценария')||'').trim(); if(!name) return; try{ const data=await api('/api/unit-matrix-scenarios',{method:'POST',body:JSON.stringify({name,payload:currentPayload()})}); document.getElementById('scenarioStatus').textContent='Сценарий сохранён в PostgreSQL: '+data.name; await loadScenarioList(); document.getElementById('scenarioSelect').value=data.id; }catch(e){ alert('Не удалось сохранить сценарий: '+e.message); } };
+document.getElementById('loadScenarioBtn').onclick=async()=>{ const id=document.getElementById('scenarioSelect').value; if(!id) return alert('Выбери сценарий.'); try{ const item=await getScenario(id); applyScenarioPayload(item.payload); document.getElementById('scenarioName').value=item.name; document.getElementById('scenarioStatus').textContent='Загружен сценарий: '+item.name; }catch(e){ alert('Не удалось загрузить: '+e.message); } };
+document.getElementById('deleteScenarioBtn').onclick=async()=>{ const id=document.getElementById('scenarioSelect').value; if(!id) return alert('Выбери сценарий.'); if(!confirm('Удалить сценарий?')) return; try{ await api('/api/unit-matrix-scenarios/'+id,{method:'DELETE'}); document.getElementById('scenarioStatus').textContent='Сценарий удалён'; await loadScenarioList(); }catch(e){ alert('Не удалось удалить: '+e.message); } };
+document.getElementById('compareScenarioBtn').onclick=async()=>{ const id=document.getElementById('compareScenarioSelect').value; if(!id) return alert('Выбери сценарий для сравнения.'); try{ const other=await getScenario(id); showCompare('Сравнение текущей таблицы с сохранённым сценарием: '+other.name, currentPayload(), other.payload); document.getElementById('scenarioStatus').textContent='Сравнение с сохранённым сценарием активно'; }catch(e){ alert('Не удалось сравнить: '+e.message); } };
+hydrate();
+loadScenarioList(); document.getElementById('scenarioStatus').textContent='Изменения сброшены';};
 document.getElementById('restoreWbBtn').onclick=()=>{hydrate(); document.getElementById('scenarioStatus').textContent='Вернули фактическую базу WB';};
 document.getElementById('compareBtn').onclick=()=>{updateTotals(); document.getElementById('scenarioStatus').textContent='Сравнение активно: смотри колонку «Влияние»';};
 document.getElementById('saveScenarioBtn').onclick=()=>{ const name=prompt('Название сценария'); if(!name) return; const data=rows.map(tr=>({sku:tr._base.sku, values:values(tr)})); const key='wb_unit_matrix_scenario_'+Date.now(); localStorage.setItem(key, JSON.stringify({name, savedAt:new Date().toISOString(), data})); document.getElementById('scenarioStatus').textContent='Сценарий сохранён в браузере: '+name; };
@@ -1691,7 +1715,9 @@ def _load_box_tariff_map(tariff_date: str, scheme: str = "fbs") -> tuple[list[st
             base = _ru_float(row.get("boxDeliveryBase"))
             liter = _ru_float(row.get("boxDeliveryLiter"))
         storage_base = _ru_float(row.get("boxStorageBase"))
-        out[name] = {"base": float(base or 0.0), "liter": float(liter or 0.0), "storage": float(storage_base or 0.0)}
+        storage_liter = _ru_float(row.get("boxStorageLiter"))
+        coef = _ru_float(row.get("boxDeliveryMarketplaceCoefExpr" if scheme == "fbs" else "boxDeliveryCoefExpr")) or _ru_float(row.get("boxDeliveryCoefExpr"))
+        out[name] = {"base": float(base or 0.0), "liter": float(liter or 0.0), "coef": float(coef or 0.0), "storageBase": float(storage_base or 0.0), "storageLiter": float(storage_liter or 0.0)}
     names.sort(key=lambda x: x.casefold())
     return names, out, ""
 
@@ -1736,6 +1762,9 @@ def _unit_matrix_row_from_summary(row: Any, detail: dict[str, Any] | None = None
         "cost": round(cost, 2),
         "commissionPct": round(commission_pct, 6),
         "warehouse": "",
+        "lengthCm": 0.0,
+        "widthCm": 0.0,
+        "heightCm": 0.0,
         "logistics": round(logistics, 2),
         "storage": round(storage, 2),
         "drr": round(drr, 6),
@@ -1795,9 +1824,15 @@ def _sku_summary_from_sales(rows: list[Any]) -> list[SimpleNamespace]:
             "profit_before_tax": 0.0,
             "tax": 0.0,
             "profit": 0.0,
+            "nm_id": 0,
         })
         if not item.get("name") or item.get("name") == sku:
             item["name"] = getattr(row, "name", "") or sku
+        if not item.get("nm_id"):
+            try:
+                item["nm_id"] = int(getattr(row, "nm_id", 0) or 0)
+            except (TypeError, ValueError):
+                item["nm_id"] = 0
         item["units"] += float(getattr(row, "quantity", 0.0) or 0.0)
         item["revenue"] += float(getattr(row, "revenue", 0.0) or 0.0)
         item["cogs"] += float(getattr(row, "cogs", 0.0) or 0.0)
@@ -3556,6 +3591,166 @@ def unit_economics():
     )
 
 
+
+
+def _content_cards_meta() -> tuple[dict[int, dict[str, Any]], dict[str, dict[str, Any]], str]:
+    """Loads richer WB card metadata for SKU matrix: brand, subject/category, photo, sizes."""
+    token = os.getenv("WB_API_TOKEN", "").strip()
+    if not token:
+        return {}, {}, "WB_API_TOKEN не задан: карточки товаров не загружены."
+    url = "https://content-api.wildberries.ru/content/v2/get/cards/list?locale=ru"
+    by_nm: dict[int, dict[str, Any]] = {}
+    by_sku: dict[str, dict[str, Any]] = {}
+    cursor: dict[str, Any] = {"limit": 100}
+    warning = ""
+    for _page in range(20):
+        body = {"settings": {"sort": {"ascending": True}, "filter": {"withPhoto": -1}, "cursor": cursor}}
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(body).encode("utf-8"),
+            headers={**_wb_tariff_headers(), "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=35) as resp:
+                payload = json.loads(resp.read().decode("utf-8") or "{}")
+        except urllib.error.HTTPError as exc:
+            if exc.code in {401, 403}:
+                return {}, {}, "Для фото, бренда и категории нужен WB-токен с доступом к карточкам/Контенту."
+            return {}, {}, f"Карточки WB не загружены: ошибка {exc.code}."
+        except Exception as exc:
+            return {}, {}, f"Карточки WB не загружены: {exc}"
+        cards = payload.get("cards") if isinstance(payload, dict) else []
+        if not isinstance(cards, list):
+            break
+        for raw in cards:
+            if not isinstance(raw, dict):
+                continue
+            try:
+                nm = int(raw.get("nmID") or raw.get("nmId") or 0)
+            except (TypeError, ValueError):
+                nm = 0
+            if nm <= 0:
+                continue
+            photos = raw.get("photos") or []
+            photo_url = ""
+            if isinstance(photos, list) and photos:
+                first = photos[0] if isinstance(photos[0], dict) else {}
+                photo_url = str(first.get("c246x328") or first.get("big") or first.get("tm") or "")
+            sizes = raw.get("sizes") or []
+            variant = ""
+            if isinstance(sizes, list) and sizes:
+                vals = []
+                for size in sizes[:3]:
+                    if isinstance(size, dict):
+                        val = str(size.get("techSize") or size.get("wbSize") or size.get("name") or "").strip()
+                        if val and val not in vals:
+                            vals.append(val)
+                variant = ", ".join(vals)
+            meta = {
+                "nm_id": nm,
+                "sku": str(raw.get("vendorCode") or "").strip(),
+                "name": str(raw.get("title") or "").strip(),
+                "brand": str(raw.get("brand") or "").strip(),
+                "category": str(raw.get("subjectName") or raw.get("object") or raw.get("imtName") or "").strip(),
+                "variant": variant,
+                "photo_url": photo_url,
+                "product_url": _wb_product_url(nm),
+            }
+            by_nm[nm] = meta
+            if meta["sku"]:
+                by_sku[meta["sku"].casefold()] = meta
+        cur = payload.get("cursor") or {}
+        total = int(cur.get("total") or 0) if isinstance(cur, dict) else 0
+        if total < int(cursor.get("limit", 100)):
+            break
+        updated_at = cur.get("updatedAt") if isinstance(cur, dict) else None
+        next_nm = cur.get("nmID") or cur.get("nmId") if isinstance(cur, dict) else None
+        if not updated_at or not next_nm:
+            break
+        cursor = {"limit": 100, "updatedAt": updated_at, "nmID": next_nm}
+    return by_nm, by_sku, warning
+
+
+def _apply_meta_to_matrix_rows(rows: list[SimpleNamespace]) -> str:
+    by_nm, by_sku, warning = _content_cards_meta()
+    for row in rows:
+        meta = None
+        try:
+            nm = int(getattr(row, "nm_id", 0) or 0)
+        except (TypeError, ValueError):
+            nm = 0
+        if nm:
+            meta = by_nm.get(nm)
+        if not meta:
+            meta = by_sku.get(str(getattr(row, "sku", "") or "").casefold())
+        if not meta:
+            continue
+        row.nm_id = meta.get("nm_id") or row.nm_id
+        row.name = meta.get("name") or row.name
+        row.category = meta.get("category") or row.category
+        row.brand = meta.get("brand") or row.brand
+        row.variant = meta.get("variant") or row.variant
+        row.photo_url = meta.get("photo_url") or row.photo_url
+        row.product_url = meta.get("product_url") or row.product_url
+        try:
+            data = json.loads(row.json.replace("&#39;", "'"))
+            data["nmId"] = int(row.nm_id or 0)
+            data["sku"] = row.sku
+            row.json = json.dumps(data, ensure_ascii=False).replace("'", "&#39;")
+        except Exception:
+            pass
+    return warning
+
+
+def _ensure_unit_matrix_scenario_table() -> None:
+    with _scenario_connect() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS unit_matrix_scenarios (
+                    id BIGSERIAL PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_unit_matrix_scenarios_updated ON unit_matrix_scenarios(updated_at DESC)")
+
+
+def _matrix_scenario_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "name": row.get("name") or "",
+        "payload": row.get("payload") or {},
+        "created_at": row["created_at"].strftime("%d.%m.%Y %H:%M") if row.get("created_at") else "",
+        "updated_at": row["updated_at"].strftime("%d.%m.%Y %H:%M") if row.get("updated_at") else "",
+    }
+
+
+def _list_unit_matrix_scenarios(limit: int = 100) -> list[dict[str, Any]]:
+    if not database_enabled():
+        return []
+    try:
+        _ensure_unit_matrix_scenario_table()
+        with _scenario_connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT id, name, payload, created_at, updated_at
+                    FROM unit_matrix_scenarios
+                    ORDER BY updated_at DESC, id DESC
+                    LIMIT %s
+                    """,
+                    (limit,),
+                )
+                return [_matrix_scenario_payload(row) for row in cursor.fetchall()]
+    except Exception:
+        logger.exception("Не удалось получить сценарии SKU-юнитки")
+        return []
+
 @app.get("/unit-matrix")
 def unit_matrix():
     if not database_enabled():
@@ -3610,13 +3805,14 @@ def unit_matrix():
         d = detail_by_sku.get(str(getattr(row, "sku", "") or "").casefold())
         matrix_rows.append(_unit_matrix_row_from_summary(row, d))
     matrix_rows.sort(key=lambda r: (r.name or r.sku).casefold())
+    meta_warning = _apply_meta_to_matrix_rows(matrix_rows)
 
     tariff_date = (date_to or date.today()).isoformat()
     fbs_warehouses, fbs_map, fbs_warning = _load_box_tariff_map(tariff_date, "fbs")
     fbw_warehouses, fbw_map, fbw_warning = _load_box_tariff_map(tariff_date, "fbw")
     warehouse_options = sorted(set(fbs_warehouses) | set(fbw_warehouses), key=lambda x: x.casefold())
     tariff_maps = {"fbs": fbs_map, "fbw": fbw_map}
-    tariff_warning = fbs_warning or fbw_warning
+    tariff_warning = fbs_warning or fbw_warning or meta_warning
     categories = sorted({r.category for r in matrix_rows if r.category}, key=lambda x: x.casefold())
     brands = sorted({r.brand for r in matrix_rows if r.brand}, key=lambda x: x.casefold())
     return render_template_string(
@@ -3634,6 +3830,7 @@ def unit_matrix():
         categories=categories,
         brands=brands,
         period_label=period_label,
+        matrix_scenarios=[{k: v for k, v in item.items() if k != "payload"} for item in _list_unit_matrix_scenarios(200)],
         money=_money,
         percent=_percent,
         units=_units,
@@ -3983,6 +4180,83 @@ def api_unit_scenarios_delete(scenario_id: int):
         return Response("", 204)
     except Exception as exc:
         logger.exception("Не удалось удалить сценарий юнитки")
+        return _json({"error": str(exc)}, 500)
+
+
+
+
+@app.get("/api/unit-matrix-scenarios")
+def api_unit_matrix_scenarios_list():
+    if not database_enabled():
+        return _json({"error": "DATABASE_URL не задан."}, 503)
+    try:
+        return _json({"items": [{k: v for k, v in item.items() if k != "payload"} for item in _list_unit_matrix_scenarios(300)]})
+    except Exception as exc:
+        logger.exception("Не удалось получить сценарии SKU-юнитки")
+        return _json({"error": str(exc)}, 500)
+
+
+@app.get("/api/unit-matrix-scenarios/<int:scenario_id>")
+def api_unit_matrix_scenario_get(scenario_id: int):
+    if not database_enabled():
+        return _json({"error": "DATABASE_URL не задан."}, 503)
+    try:
+        _ensure_unit_matrix_scenario_table()
+        with _scenario_connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT id, name, payload, created_at, updated_at FROM unit_matrix_scenarios WHERE id = %s", (scenario_id,))
+                row = cursor.fetchone()
+                if not row:
+                    return _json({"error": "Сценарий не найден."}, 404)
+                return _json(_matrix_scenario_payload(row))
+    except Exception as exc:
+        logger.exception("Не удалось загрузить сценарий SKU-юнитки")
+        return _json({"error": str(exc)}, 500)
+
+
+@app.post("/api/unit-matrix-scenarios")
+def api_unit_matrix_scenario_save():
+    if not database_enabled():
+        return _json({"error": "DATABASE_URL не задан."}, 503)
+    try:
+        data = request.get_json(silent=True) or {}
+        name = str(data.get("name") or "").strip()
+        payload = data.get("payload") or {}
+        if not name:
+            return _json({"error": "Название сценария обязательно."}, 400)
+        if len(name) > 180:
+            name = name[:180]
+        _ensure_unit_matrix_scenario_table()
+        with _scenario_connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO unit_matrix_scenarios (name, payload)
+                    VALUES (%s, %s::jsonb)
+                    ON CONFLICT (name)
+                    DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()
+                    RETURNING id, name, payload, created_at, updated_at
+                    """,
+                    (name, json.dumps(payload, ensure_ascii=False)),
+                )
+                return _json(_matrix_scenario_payload(cursor.fetchone()))
+    except Exception as exc:
+        logger.exception("Не удалось сохранить сценарий SKU-юнитки")
+        return _json({"error": str(exc)}, 500)
+
+
+@app.delete("/api/unit-matrix-scenarios/<int:scenario_id>")
+def api_unit_matrix_scenario_delete(scenario_id: int):
+    if not database_enabled():
+        return _json({"error": "DATABASE_URL не задан."}, 503)
+    try:
+        _ensure_unit_matrix_scenario_table()
+        with _scenario_connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM unit_matrix_scenarios WHERE id = %s", (scenario_id,))
+        return Response("", 204)
+    except Exception as exc:
+        logger.exception("Не удалось удалить сценарий SKU-юнитки")
         return _json({"error": str(exc)}, 500)
 
 
