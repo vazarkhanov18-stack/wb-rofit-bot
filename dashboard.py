@@ -148,7 +148,7 @@ function updateTotals(){ const t=aggregateTotals(); document.getElementById('vis
 function tariffFor(v){ if(v.warehouse==='__fbs_vladikavkaz__' || v.warehouse==='__fbs_manual__') return null; const map=tariffMaps[v.scheme] || {}; return map[v.warehouse] || null; }
 function applyTariff(tr){ const v=values(tr); const t=tariffFor(v); if(!t) { recalcRow(tr); updateTotals(); return; } const liters=chargeLiters(v.volume); const logRub=(t.base||0) + Math.max(0,liters-1)*(t.liter||0); const storageRub=(t.storageBase||0) + Math.max(0,liters-1)*(t.storageLiter||0); const log=tr.querySelector('[data-key="logistics"]'); const st=tr.querySelector('[data-key="storage"]'); log.value=String(Math.round(logRub*100)/100).replace('.', ','); st.value=String(Math.round(storageRub*100)/100).replace('.', ','); recalcRow(tr); updateTotals(); }
 function applyFilters(doTotals=true){ const fc=document.getElementById('filterCategory').value, fb=document.getElementById('filterBrand').value, fw=document.getElementById('filterWarehouse').value, fs=document.getElementById('filterStatus').value, fm=num(document.getElementById('filterMargin').value); rows.forEach(tr=>{let ok=true; if(fc&&tr.dataset.category!==fc) ok=false; if(fb&&tr.dataset.brand!==fb) ok=false; if(fw&&tr.dataset.warehouse!==fw) ok=false; if(fs&&tr.dataset.status!==fs) ok=false; if(fm&&num(tr.dataset.margin)<fm) ok=false; tr.style.display=ok?'':'none';}); if(doTotals) updateTotals(); }
-function currentPayload(){ return {version:41.1, savedAt:new Date().toISOString(), targetMargin:num(document.getElementById('targetMarginInput').value), rows:rows.map(tr=>({sku:tr._base.sku, nmId:tr._base.nmId, name:tr.querySelector('.sku-name')?.textContent?.trim()||tr._base.sku, values:values(tr), calc:tr._calc, baseProfit:tr._base.baseProfit||0}))}; }
+function currentPayload(){ return {version:42, savedAt:new Date().toISOString(), targetMargin:num(document.getElementById('targetMarginInput').value), rows:rows.map(tr=>({sku:tr._base.sku, nmId:tr._base.nmId, name:tr.querySelector('.sku-name')?.textContent?.trim()||tr._base.sku, values:values(tr), calc:tr._calc, baseProfit:tr._base.baseProfit||0}))}; }
 function renderScenarioSelects(){ const selects=[document.getElementById('scenarioSelect'), document.getElementById('compareScenarioSelect')]; selects.forEach(sel=>{ if(!sel) return; const cur=sel.value; sel.innerHTML='<option value="">— выбрать сценарий —</option>' + savedScenarios.map(x=>`<option value="${x.id}">${escapeHtml(x.name)} · ${escapeHtml(x.updated_at||'')}</option>`).join(''); sel.value=cur; }); }
 function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 async function api(url, options={}){ const resp=await fetch(url,{headers:{'Content-Type':'application/json'},...options}); if(!resp.ok){let msg='Ошибка запроса'; try{msg=(await resp.json()).error||msg}catch(e){} throw new Error(msg)} if(resp.status===204) return {}; return await resp.json(); }
@@ -170,8 +170,7 @@ function calcScenarioValuesFromQuery(query){
   const volume=Math.max(0,lengthCm*widthCm*heightCm/1000);
   const baseLog=n('base_logistics',0) + Math.max(0, volume-1)*n('extra_liter_cost',0);
   const locCoef = Math.max(0.0001, n('localization_pct',1) || 1);
-  const irpCoef = Math.max(0.0001, n('irp',1) || 1);
-  const outbound=baseLog * locCoef * irpCoef;
+  const outbound=baseLog * locCoef;
   const logistics=outbound/buyout + n('return_logistics',0)*(1-buyout)/buyout;
   const purchase=n('purchase_price',0);
   const other=n('acceptance',0)+n('mp_delivery',0)+n('packaging_cost',0)+n('tariff_options',0)+n('other_cost',0)+purchase*rate('defect_pct',0);
@@ -301,7 +300,7 @@ UNIT_TEMPLATE = r"""
 
 UNIT_CALCULATOR_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Калькулятор юнитки · {{ title }}</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
-<header><div><h1>Калькулятор юнит-экономики</h1><div class="subtitle">Плановый расчёт товара: цена, СПП, выкуп, комиссия, логистика, реклама, налоги и чистая прибыль</div></div><div class="badge">Ручной сценарий + тарифы WB · v41</div></header>
+<header><div><h1>Калькулятор юнит-экономики</h1><div class="subtitle">Плановый расчёт товара: цена, СПП, выкуп, комиссия, логистика, реклама, налоги и чистая прибыль</div></div><div class="badge">Ручной сценарий + тарифы WB · v42</div></header>
 <nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-matrix">SKU-юнитка</a><a class="active" href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
 <div class="hint" style="margin:0 0 16px">Это плановый калькулятор. Можно считать сценарии вручную, выбирать склад из тарифов WB или свой FBS-СЦ вручную, подтягивать фактическую логистику из продаж и сохранять расчёты в PostgreSQL. Комиссию WB пока оставь вручную или используй фактическую долю из отчётов, потому что для точной комиссии нужен предмет/категория товара.</div>
 {% if tariff_notice %}<div class="notice {{ tariff_notice.kind }}">{{ tariff_notice.text }}</div>{% endif %}
@@ -319,17 +318,17 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 <div class="field"><label>Цена закупа 1 товара, ₽</label><input inputmode="decimal" name="purchase_price" value="{{ number_input(values.purchase_price) }}"></div>
 </div></div>
 
-<div class="card section"><div class="section-head"><div><h2>2. Логистика</h2><div class="subtitle">Габариты, упаковка, склад, локализация, приёмка и хранение</div></div></div>
+<div class="card section"><div class="section-head"><div><h2>2. Логистика</h2><div class="subtitle">Габариты, упаковка, склад, тарифы, приёмка и хранение</div></div></div>
 <div class="form-grid">
 <div class="field"><label>Тип упаковки</label><select name="package_type"><option value="box" {% if values.package_type == 'box' %}selected{% endif %}>Короб</option><option value="mono" {% if values.package_type == 'mono' %}selected{% endif %}>Монопаллета</option></select></div>
 <div class="field"><label>Режим склада</label><select name="warehouse_mode"><option value="api" {% if values.warehouse_mode == 'api' %}selected{% endif %}>Склад из тарифов WB</option><option value="manual" {% if values.warehouse_mode == 'manual' %}selected{% endif %}>Мой FBS-склад вручную</option></select><div class="hint" style="margin-top:6px">Если в тарифном API нет твоего СЦ, например СЦ Владикавказ, выбери ручной режим.</div></div>
 <div class="field"><label>{% if values.warehouse_mode == 'manual' %}Мой FBS-склад{% else %}Склад WB{% endif %}</label>{% if values.warehouse_mode == 'manual' %}<input name="warehouse" list="manualFbsPoints" value="{{ values.warehouse }}" placeholder="Например, СЦ Владикавказ"><datalist id="manualFbsPoints">{% for wh in manual_warehouses %}<option value="{{ wh }}">{% endfor %}</datalist>{% elif warehouse_options %}<select name="warehouse" id="warehouseSelect"><option value="">Выбери склад WB</option>{% if values.warehouse and values.warehouse not in warehouse_options %}<option value="{{ values.warehouse }}" selected>{{ values.warehouse }}</option>{% endif %}{% for wh in warehouse_options %}<option value="{{ wh }}" {% if values.warehouse == wh %}selected{% endif %}>{{ wh }}</option>{% endfor %}</select>{% else %}<input name="warehouse" value="{{ values.warehouse }}" placeholder="Например, Коледино / Электросталь">{% endif %}<div class="hint" style="margin-top:6px">В режиме WB список берётся из тарифов. В ручном FBS-режиме можно указать любой СЦ и заполнить тарифы вручную или по фактическим продажам.</div></div>
 <div class="field"><label>Дата тарифов WB</label><input type="date" name="tariff_date" value="{{ values.tariff_date }}"></div>
-<div class="field"><label>Индекс локализации, %</label><input inputmode="decimal" name="localization_pct" value="{{ percent_input(values.localization_pct) }}"></div>
-<div class="field"><label>ИРП / коэффициент</label><input inputmode="decimal" name="irp" value="{{ number_input(values.irp) }}"><div class="hint" style="margin-top:6px">Если поле пустое или 0 — считается как коэффициент 1. Иначе прямая логистика обнулится.</div></div>
+<div class="field"><label>Поправка к тарифу, %</label><input inputmode="decimal" name="localization_pct" value="{{ percent_input(values.localization_pct) }}"><div class="hint" style="margin-top:6px">Обычно оставляй 100%. Тариф WB уже подтягивается финальным значением; это поле нужно только для ручной корректировки.</div></div>
 <div class="field"><label>Длина, см</label><input inputmode="decimal" name="length_cm" value="{{ number_input(values.length_cm) }}"></div>
 <div class="field"><label>Ширина, см</label><input inputmode="decimal" name="width_cm" value="{{ number_input(values.width_cm) }}"></div>
 <div class="field"><label>Высота, см</label><input inputmode="decimal" name="height_cm" value="{{ number_input(values.height_cm) }}"></div>
+<div class="field"><label>Объём, л</label><input id="volumePreview" readonly value="{{ number(calc.volume_liters) if calculated else number(0) }}"><div class="hint" style="margin-top:6px">Считается автоматически без округления: Д×Ш×В / 1000.</div></div>
 <div class="field"><label>Базовая логистика WB, ₽</label><input inputmode="decimal" name="base_logistics" value="{{ number_input(values.base_logistics) }}"></div>
 <div class="field"><label>Доплата за литр, ₽</label><input inputmode="decimal" name="extra_liter_cost" value="{{ number_input(values.extra_liter_cost) }}"></div>
 <div class="field"><label>Обратная логистика, ₽</label><input inputmode="decimal" name="return_logistics" value="{{ number_input(values.return_logistics) }}"></div>
@@ -382,8 +381,30 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 </div>
 
 <div class="section two-col"><div class="card"><div class="section-head"><div><h2>Расчёт по строкам</h2><div class="subtitle">Как на калькуляторе: партия, юнитка и доля в выручке</div></div></div><div class="table-wrap"><table style="min-width:960px"><thead><tr><th>Показатель</th><th>Партия</th><th>Unit-экономика</th><th>Доля в выручке</th></tr></thead><tbody>{% for row in breakdown %}<tr><td>{{ row.label }}</td><td class="{{ row.cls }}">{{ row.batch }}</td><td class="{{ row.cls }}">{{ row.unit }}</td><td>{{ row.share }}</td></tr>{% endfor %}</tbody></table></div></div>
-<div class="card"><h2>Пояснение</h2><div class="hint"><b>Цена с СПП</b> — это цена, которую видит покупатель. Если указан СПП %, калькулятор считает <b>расчётную цену до СПП</b> и уже от неё считает комиссию, ДРР, налог и прибыль. <b>Выкуп</b> влияет только на логистику: логистика к покупателю делится на процент выкупа, а обратная логистика добавляется на невыкупленные заказы. Для FBS-СЦ, которого нет в тарифах WB, используй режим <b>Мой FBS-склад вручную</b> или кнопку фактической логистики из продаж. Колонка <b>Партия</b> считается по количеству закупа, поэтому при закупе 1 шт. она совпадает с unit-экономикой.</div><div class="summary" style="margin-top:14px"><span>Схема: {{ values.scheme|upper }}</span><span>Упаковка: {{ 'Монопаллета' if values.package_type == 'mono' else 'Короб' }}</span><span>Режим склада: {{ 'ручной FBS' if values.warehouse_mode == 'manual' else 'тарифы WB' }}</span><span>Склад: {{ values.warehouse or 'не указан' }}</span><span>Цена с СПП: {{ money(calc.price_spp) if calc.price_spp else '—' }}</span><span>Расчётная цена до СПП: {{ money(calc.price_before_spp) if calc.price_before_spp else '—' }}</span></div></div></div>
+<div class="card"><h2>Пояснение</h2><div class="hint"><b>Цена с СПП</b> — это цена, которую видит покупатель. Если указан СПП %, калькулятор считает <b>расчётную цену до СПП</b> и уже от неё считает комиссию, ДРР, налог и прибыль. <b>Выкуп</b> влияет только на логистику: логистика к покупателю делится на процент выкупа, а обратная логистика добавляется на невыкупленные заказы. <b>Объём</b> считается без округления: 1,57 л остаётся 1,57 л. Для FBS-СЦ, которого нет в тарифах WB, используй режим <b>Мой FBS-склад вручную</b> или кнопку фактической логистики из продаж. Колонка <b>Партия</b> считается по количеству закупа, поэтому при закупе 1 шт. она совпадает с unit-экономикой.</div><div class="summary" style="margin-top:14px"><span>Схема: {{ values.scheme|upper }}</span><span>Упаковка: {{ 'Монопаллета' if values.package_type == 'mono' else 'Короб' }}</span><span>Режим склада: {{ 'ручной FBS' if values.warehouse_mode == 'manual' else 'тарифы WB' }}</span><span>Склад: {{ values.warehouse or 'не указан' }}</span><span>Цена с СПП: {{ money(calc.price_spp) if calc.price_spp else '—' }}</span><span>Расчётная цена до СПП: {{ money(calc.price_before_spp) if calc.price_before_spp else '—' }}</span></div></div></div>
 {% endif %}
+
+<script>
+(function(){
+  const form = document.querySelector('form.section');
+  if(!form) return;
+  const volumeInput = document.getElementById('volumePreview');
+  function parseNum(v){ return parseFloat(String(v||'').replace(',', '.').replace(/\s/g,'')) || 0; }
+  function fmt(v){ return (Math.round(v*1000)/1000).toString().replace('.', ','); }
+  function updateVolume(){
+    if(!volumeInput) return;
+    const l=parseNum(form.querySelector('[name="length_cm"]')?.value);
+    const w=parseNum(form.querySelector('[name="width_cm"]')?.value);
+    const h=parseNum(form.querySelector('[name="height_cm"]')?.value);
+    volumeInput.value = fmt(Math.max(0,l*w*h/1000));
+  }
+  ['length_cm','width_cm','height_cm'].forEach(n=>{
+    const el=form.querySelector(`[name="${n}"]`);
+    if(el) el.addEventListener('input', updateVolume);
+  });
+  updateVolume();
+})();
+</script>
 
 <script>
 (function(){
@@ -1348,11 +1369,15 @@ def _apply_wb_tariffs(values: DotDict) -> tuple[DotDict, DotDict]:
             if row is None:
                 names = ", ".join(str(r.get("warehouseName")) for r in rows[:8] if r.get("warehouseName"))
                 return values, DotDict({"kind": "error", "text": f"Склад «{warehouse}» не найден в тарифах паллет. Примеры складов: {names or 'нет данных'}."})
-            values.base_logistics = _ru_float(row.get("palletDeliveryValueBase")) or values.base_logistics
-            values.extra_liter_cost = _ru_float(row.get("palletDeliveryValueLiter")) or values.extra_liter_cost
-            coef = _ru_float(row.get("palletDeliveryExpr"))
-            if coef:
-                values.localization_pct = coef / 100.0
+            raw_base = _ru_float(row.get("palletDeliveryValueBase"))
+            raw_liter = _ru_float(row.get("palletDeliveryValueLiter"))
+            coef = _ru_float(row.get("palletDeliveryExpr")) or 100.0
+            coef_mult = coef / 100.0 if coef > 10 else coef
+            if raw_base:
+                values.base_logistics = raw_base * coef_mult
+            if raw_liter:
+                values.extra_liter_cost = raw_liter * coef_mult
+            values.localization_pct = 1.0
             storage_value = _ru_float(row.get("palletStorageValueExpr"))
             if storage_value:
                 values.storage_per_day = storage_value
@@ -1367,11 +1392,16 @@ def _apply_wb_tariffs(values: DotDict) -> tuple[DotDict, DotDict]:
                 base_key, liter_key, coef_key = "boxDeliveryMarketplaceBase", "boxDeliveryMarketplaceLiter", "boxDeliveryMarketplaceCoefExpr"
             else:
                 base_key, liter_key, coef_key = "boxDeliveryBase", "boxDeliveryLiter", "boxDeliveryCoefExpr"
-            values.base_logistics = _ru_float(row.get(base_key)) or _ru_float(row.get("boxDeliveryBase")) or values.base_logistics
-            values.extra_liter_cost = _ru_float(row.get(liter_key)) or _ru_float(row.get("boxDeliveryLiter")) or values.extra_liter_cost
-            coef = _ru_float(row.get(coef_key)) or _ru_float(row.get("boxDeliveryCoefExpr"))
-            if coef:
-                values.localization_pct = coef / 100.0
+            raw_base = _ru_float(row.get(base_key)) or _ru_float(row.get("boxDeliveryBase"))
+            raw_liter = _ru_float(row.get(liter_key)) or _ru_float(row.get("boxDeliveryLiter"))
+            coef = _ru_float(row.get(coef_key)) or _ru_float(row.get("boxDeliveryCoefExpr")) or 100.0
+            coef_mult = coef / 100.0 if coef > 10 else coef
+            if raw_base:
+                values.base_logistics = raw_base * coef_mult
+            if raw_liter:
+                values.extra_liter_cost = raw_liter * coef_mult
+            # Тариф уже умножен на коэффициент склада, поэтому поле локализации оставляем 100%.
+            values.localization_pct = 1.0
             storage_base = _ru_float(row.get("boxStorageBase"))
             storage_liter = _ru_float(row.get("boxStorageLiter"))
             volume = max(0.0, float(values.length_cm or 0) * float(values.width_cm or 0) * float(values.height_cm or 0) / 1000.0)
@@ -1394,8 +1424,8 @@ def _apply_wb_tariffs(values: DotDict) -> tuple[DotDict, DotDict]:
         msg = (
             f"Подтянул тарифы WB для склада «{warehouse}» на {tariff_date}: "
             f"база логистики {values.base_logistics:g} ₽, доп. литр {values.extra_liter_cost:g} ₽, "
-            f"коэф. {values.localization_pct * 100:g}%, хранение {values.storage_per_day:g} ₽/день, "
-            f"обратная логистика {values.return_logistics:g} ₽. Проверь комиссию и приёмку вручную."
+            f"хранение {values.storage_per_day:g} ₽/день, "
+            f"обратная логистика {values.return_logistics:g} ₽. Тариф уже подтянут как итоговый для склада; поправку к тарифу обычно оставляй 100%. Проверь комиссию и приёмку вручную."
         )
         return values, DotDict({"kind": "ok", "text": msg})
     except RuntimeError as exc:
@@ -1474,7 +1504,7 @@ def _unit_calculator_values(product_summary=None) -> DotDict:
         "warehouse": request.args.get("warehouse", "").strip()[:100],
         "tariff_date": _query_tariff_date(),
         "localization_pct": max(0.0001, _query_rate("localization_pct", 1, min_value=0, max_value=10) or 1),
-        "irp": max(0.0001, _query_float("irp", 1) or 1),
+        "irp": 1.0,
         "length_cm": max(0.0, _query_float("length_cm", 0)),
         "width_cm": max(0.0, _query_float("width_cm", 0)),
         "height_cm": max(0.0, _query_float("height_cm", 0)),
@@ -1506,15 +1536,11 @@ def _calculate_unit_plan(values: DotDict) -> tuple[DotDict, list[dict[str, str]]
     buyout = max(0.0001, min(1.0, float(values.buyout_pct or 0)))
     volume_liters = max(0.0, float(values.length_cm or 0) * float(values.width_cm or 0) * float(values.height_cm or 0) / 1000.0)
     base_logistics = float(values.base_logistics or 0) + max(0.0, volume_liters - 1.0) * float(values.extra_liter_cost or 0)
-    # Empty/zero coefficients should not silently zero out the whole logistics calculation.
-    # Treat 0 as 1: base tariff remains active; user can still change the coefficient above 1 if needed.
+    # Тариф уже подтянут как итоговый для склада. Поправка к тарифу нужна только для ручной корректировки.
     localization_coef = float(values.localization_pct or 1.0)
     if localization_coef <= 0:
         localization_coef = 1.0
-    irp_coef = float(values.irp or 1.0)
-    if irp_coef <= 0:
-        irp_coef = 1.0
-    outbound_logistics = base_logistics * localization_coef * irp_coef
+    outbound_logistics = base_logistics * localization_coef
     logistics_per_buyout = outbound_logistics / buyout + float(values.return_logistics or 0) * (1.0 - buyout) / buyout
     storage = float(values.turnover_days or 0) * float(values.storage_per_day or 0)
     purchase = float(values.purchase_price or 0)
