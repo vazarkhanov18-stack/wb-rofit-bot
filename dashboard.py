@@ -113,14 +113,14 @@ PRODUCTS_TEMPLATE = r"""
 
 UNIT_MATRIX_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>SKU-юнитка · WB Profit</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
-<header><div><h1>Интерактивная юнит-экономика по SKU</h1><div class="subtitle">Excel-like таблица: цена с СПП, схема FBS/FBW, ручные FBS-склады, тарифы, фото и ссылки WB прямо в строке</div></div><div class="badge">Факт + сценарии · v39</div></header>
+<header><div><h1>Интерактивная юнит-экономика по SKU</h1><div class="subtitle">Excel-like таблица: цена с СПП, схема FBS/FBW, ручные FBS-склады, тарифы, фото и ссылки WB прямо в строке</div></div><div class="badge">Факт + сценарии · v40</div></header>
 <nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a class="active" href="/unit-matrix">SKU-юнитка</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><label>Период<select name="period_type"><option value="actual" {% if selected_type == 'actual' %}selected{% endif %}>Актуально без дублей</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select></label><label>С даты<input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату<input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск<input name="q" value="{{ query }}" placeholder="товар / артикул / nmID"></label><label>Целевая маржа, %<input id="targetMarginInput" name="target_margin" inputmode="decimal" value="{{ target_margin_input }}"></label><button type="submit">Показать</button></form>
 <div class="hint">Фактический режим показывает базовую юнит-экономику из сохранённых отчётов. Изменения в таблице — это <b>сценарий</b>: они не затирают данные WB и не меняют себестоимость в базе, пока ты отдельно не сохранишь её в разделе «Себестоимость и расходы».</div>
 {% if tariff_warning %}<div class="notice error">{{ tariff_warning }}</div>{% endif %}
 <div class="section card"><div class="section-head"><div><h2>Управление сценарием</h2><div class="subtitle">Меняй ячейки — прибыль, маржа, ROI и минимальная цена пересчитаются сразу без перезагрузки</div></div><span id="scenarioStatus" class="matrix-mode-badge">Фактическая база</span></div>
 <div class="matrix-toolbar"><div class="field"><label>Фильтр категории</label><select id="filterCategory"><option value="">Все</option>{% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select></div><div class="field"><label>Фильтр бренда</label><select id="filterBrand"><option value="">Все</option>{% for b in brands %}<option value="{{ b }}">{{ b }}</option>{% endfor %}</select></div><div class="field"><label>Фильтр склада</label><select id="filterWarehouse"><option value="">Все</option>{% for wh in warehouse_options %}<option value="{{ wh }}">{{ wh }}</option>{% endfor %}</select></div><div class="field"><label>Статус</label><select id="filterStatus"><option value="">Все</option><option value="good">Прибыльный</option><option value="warn">На грани</option><option value="bad">Убыточный</option></select></div><div class="field"><label>Мин. маржа, %</label><input id="filterMargin" inputmode="decimal" placeholder="например 10"></div></div>
-<div class="matrix-toolbar" style="margin-top:10px"><div class="field"><label>Название сценария</label><input id="scenarioName" placeholder="Например: Краснодар · ДРР 15%"></div><button type="button" class="secondary" id="saveScenarioBtn">Сохранить сценарий</button><div class="field"><label>Загрузить сценарий</label><select id="scenarioSelect" class="scenario-select"><option value="">— сохранённые сценарии —</option></select></div><button type="button" class="secondary" id="loadScenarioBtn">Загрузить</button><button type="button" class="danger" id="deleteScenarioBtn">Удалить</button><div class="field"><label>Сравнить с другим</label><select id="compareScenarioSelect" class="scenario-select"><option value="">— выбрать сценарий —</option></select></div><button type="button" id="compareScenarioBtn">Сравнить сценарии</button><button type="button" class="secondary" id="resetScenarioBtn">Сбросить изменения</button><button type="button" class="secondary" id="restoreWbBtn">Вернуть данные из WB</button><button type="button" id="compareBtn">Сравнить с базой</button></div><div id="scenarioCompare" class="compare-panel" style="display:none"></div></div>
+<div class="matrix-toolbar" style="margin-top:10px"><div class="field"><label>Название сценария</label><input id="scenarioName" placeholder="Например: Краснодар · ДРР 15%"></div><button type="button" class="secondary" id="saveScenarioBtn">Сохранить сценарий</button><div class="field"><label>Загрузить сценарий</label><select id="scenarioSelect" class="scenario-select"><option value="">— сохранённые сценарии —</option></select></div><button type="button" class="secondary" id="loadScenarioBtn">Загрузить</button><button type="button" class="danger" id="deleteScenarioBtn">Удалить</button><div class="field"><label>Сравнить с другим</label><select id="compareScenarioSelect" class="scenario-select"><option value="">— выбрать сценарий —</option></select></div><button type="button" id="compareScenarioBtn">Сравнить сценарии</button><button type="button" class="secondary" id="resetScenarioBtn">Сбросить изменения</button><button type="button" class="secondary" id="restoreWbBtn">Вернуть данные из WB</button><button type="button" class="secondary" id="applyCalcScenariosBtn">Подтянуть из калькулятора</button><button type="button" class="secondary" id="fillMissingCalcScenariosBtn">Заполнить пустые из калькулятора</button><button type="button" id="compareBtn">Сравнить с базой</button></div><div id="scenarioCompare" class="compare-panel" style="display:none"></div><div class="hint" style="margin-top:10px"><b>Связка с калькулятором:</b> кнопка «Подтянуть из калькулятора» берёт сохранённые сценарии из раздела «Калькулятор юнитки» и заполняет строки SKU по совпадению артикула/nmID/названия. Это сценарный расчёт, фактические данные WB не затираются.</div></div>
 <div class="grid section"><div class="card"><div class="label">SKU в таблице</div><div class="value" id="visibleCount">{{ rows|length }}</div></div><div class="card"><div class="label">Сценарная прибыль</div><div class="value good" id="totalProfit">0 ₽</div></div><div class="card"><div class="label">Влияние на прибыль</div><div class="value" id="totalImpact">0 ₽</div></div><div class="card"><div class="label">Средняя маржа</div><div class="value" id="avgMargin">0%</div></div><div class="card"><div class="label">Убыточных / на грани</div><div class="value" id="badCount">0 / 0</div></div></div>
 <div class="section card"><div class="section-head"><div><h2>Таблица SKU</h2><div class="subtitle">Первая колонка закреплена. Цена считается как в калькуляторе юнитки: вводишь цену для покупателя с СПП и СПП %, система считает цену до СПП. Склад выбирается прямо в строке; для FBS можно выбрать ручной СЦ, например СЦ Владикавказ.</div></div><span class="muted">{{ period_label }}</span></div><div class="sku-matrix-wrap"><table class="sku-matrix" id="unitMatrix"><thead><tr><th class="sticky-product">Товар</th><th>Артикул WB / SKU</th><th>SKU / размер / цвет</th><th>Категория</th><th>Схема</th><th>Цена с СПП</th><th>СПП, %</th><th>Цена до СПП</th><th>Себестоимость</th><th>Комиссия WB, %</th><th>Комиссия WB, ₽</th><th>Склад</th><th>Длина, см</th><th>Ширина, см</th><th>Высота, см</th><th>Объём, л</th><th>Логистика, ₽</th><th>Хранение, ₽</th><th>Реклама / ДРР</th><th>Налог, %</th><th>Прочие расходы</th><th>Чистая прибыль, ₽</th><th>Маржа, %</th><th>ROI, %</th><th>Точка безуб.</th><th>Мин. цена</th><th>Цена для маржи</th><th>Влияние</th><th>Статус</th></tr></thead><tbody>
 {% for row in rows %}<tr data-row='{{ row.json|safe }}' data-category="{{ row.category }}" data-brand="{{ row.brand }}"><td class="sticky-product"><div class="sku-product-cell"><a href="{{ row.product_url }}" target="_blank" rel="noopener"><img class="sku-img" src="{{ row.photo_url }}" onerror="this.style.display='none'"></a><div><div class="sku-name">{% if row.product_url %}<a class="text-link" href="{{ row.product_url }}" target="_blank" rel="noopener">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</div><div class="sku-meta">nmID {{ row.nm_id or '—' }} · факт: {{ units(row.units) }} шт.{% if row.product_url %} · <a class="text-link" href="{{ row.product_url }}" target="_blank" rel="noopener">открыть WB</a>{% endif %}</div></div></div></td><td>{{ row.sku }}</td><td class="muted">{{ row.variant }}</td><td>{{ row.category }}</td><td><select class="js-field scheme-input" data-key="scheme"><option value="fbs">FBS</option><option value="fbw">FBW</option></select></td><td><input class="js-field" data-key="priceSpp" inputmode="decimal"></td><td><input class="js-field" data-key="sppPct" inputmode="decimal"></td><td class="js-priceBeforeSpp">0 ₽</td><td><input class="js-field" data-key="cost" inputmode="decimal"></td><td><input class="js-field" data-key="commissionPct" inputmode="decimal"></td><td class="js-commissionRub">0 ₽</td><td><select class="js-field warehouse-input" data-key="warehouse"><option value="">—</option>{% for wh in warehouse_options %}<option value="{{ wh }}">{{ wh }}</option>{% endfor %}<option value="__fbs_vladikavkaz__">СЦ Владикавказ · ручной FBS</option><option value="__fbs_manual__">Мой FBS-склад вручную</option></select></td><td><input class="js-field dimension-input" data-key="lengthCm" inputmode="decimal"></td><td><input class="js-field dimension-input" data-key="widthCm" inputmode="decimal"></td><td><input class="js-field dimension-input" data-key="heightCm" inputmode="decimal"></td><td class="js-volume volume-cell">0</td><td><input class="js-field" data-key="logistics" inputmode="decimal"></td><td><input class="js-field" data-key="storage" inputmode="decimal"></td><td><input class="js-field" data-key="drr" inputmode="decimal"></td><td><input class="js-field" data-key="taxPct" inputmode="decimal"></td><td><input class="js-field" data-key="other" inputmode="decimal"></td><td class="js-profit">0 ₽</td><td class="js-margin">0%</td><td class="js-roi">0%</td><td class="js-breakEven">0 ₽</td><td class="js-minPrice">0 ₽</td><td class="js-targetPrice">0 ₽</td><td class="js-impact matrix-impact">0 ₽</td><td><span class="sku-status js-status">—</span></td></tr>{% else %}<tr><td colspan="29" class="empty">Нет товаров за выбранный период.</td></tr>{% endfor %}
@@ -128,6 +128,7 @@ UNIT_MATRIX_TEMPLATE = r"""
 <script>
 const tariffMaps = {{ tariff_maps|tojson }};
 const initialScenarios = {{ matrix_scenarios|tojson }};
+const calcScenarios = {{ calc_scenarios|tojson }};
 const moneyFmt = new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2});
 const num = (v)=>{ if(v===null||v===undefined) return 0; if(typeof v==='number') return v; const s=String(v).replace(/\s/g,'').replace('%','').replace(',','.'); const n=parseFloat(s); return Number.isFinite(n)?n:0; };
 const money = (v)=> moneyFmt.format(v).replace(',', '.') + ' ₽';
@@ -156,6 +157,97 @@ function applyScenarioPayload(payload){ if(!payload || !payload.rows) return; co
 async function getScenario(id){ return await api('/api/unit-matrix-scenarios/'+id); }
 function scenarioTotals(payload){ if(!payload || !payload.rows) return {profit:0,revenue:0,margin:0,bad:0,warn:0}; let profit=0,revenue=0,bad=0,warn=0; payload.rows.forEach(r=>{ const c=r.calc||{}; const v=r.values||{}; profit+=num(c.profit); revenue+=num(v.price); if(num(c.profit)<0) bad++; else if(num(c.margin)<5) warn++; }); return {profit,revenue,margin:revenue?profit/revenue*100:0,bad,warn}; }
 function showCompare(title, a, b){ const ta=scenarioTotals(a), tb=scenarioTotals(b); const diff=ta.profit-tb.profit; const el=document.getElementById('scenarioCompare'); el.style.display='block'; el.innerHTML=`<b>${escapeHtml(title)}</b><br>Сценарий: <b>${money(ta.profit)}</b>, маржа ${pct(ta.margin)} · База/сравнение: <b>${money(tb.profit)}</b>, маржа ${pct(tb.margin)} · Разница: <b class="${diff>=0?'profit-pos':'profit-neg'}">${diff>=0?'+':''}${money(diff)}</b>`; }
+
+function calcScenarioValuesFromQuery(query){
+  const p=new URLSearchParams(query||'');
+  const get=(k,d='')=>p.get(k) ?? d;
+  const n=(k,d=0)=>num(get(k,d));
+  const rate=(k,d=0)=>{ const v=n(k,d); return v>1 ? v/100 : v; };
+  const priceSpp=n('price_spp',0);
+  const sppPct=rate('spp_pct',0);
+  const buyout=Math.max(0.0001, Math.min(1, rate('buyout_pct',1)));
+  const lengthCm=n('length_cm',0), widthCm=n('width_cm',0), heightCm=n('height_cm',0);
+  const volume=Math.max(0,lengthCm*widthCm*heightCm/1000);
+  const baseLog=n('base_logistics',0) + Math.max(0, volume-1)*n('extra_liter_cost',0);
+  const outbound=baseLog * Math.max(0,n('localization_pct',1)) * Math.max(0,n('irp',1));
+  const logistics=outbound/buyout + n('return_logistics',0)*(1-buyout)/buyout;
+  const purchase=n('purchase_price',0);
+  const other=n('acceptance',0)+n('mp_delivery',0)+n('packaging_cost',0)+n('tariff_options',0)+n('other_cost',0)+purchase*rate('defect_pct',0);
+  const storage=n('turnover_days',0)*n('storage_per_day',0);
+  const wh=(get('warehouse','')||'').trim();
+  let warehouse=wh;
+  const whMode=(get('warehouse_mode','api')||'api').toLowerCase();
+  if(whMode==='manual'){
+    if(wh.toLowerCase().includes('владикавказ')) warehouse='__fbs_vladikavkaz__';
+    else if(wh) warehouse='__calc_manual__:'+wh;
+    else warehouse='__fbs_manual__';
+  }
+  return {
+    sku:(get('sku','')||'').trim(),
+    productName:(get('product_name','')||'').trim(),
+    scheme:(get('scheme','fbs')||'fbs').toLowerCase()==='fbw'?'fbw':'fbs',
+    priceSpp: priceSpp,
+    sppPct: sppPct*100,
+    cost: purchase,
+    commissionPct: rate('commission_pct',0)*100,
+    warehouse: warehouse,
+    manualWarehouseName: wh,
+    lengthCm, widthCm, heightCm,
+    logistics: logistics,
+    storage: storage,
+    drr: rate('drr_pct',0)*100,
+    taxPct: rate('tax_pct',0.06)*100,
+    other: other,
+  };
+}
+function normKey(s){ return String(s||'').toLowerCase().replace(/ё/g,'е').replace(/\s+/g,' ').trim(); }
+function rowMatchScore(tr, sc){
+  const b=tr._base||{};
+  const rowSku=normKey(b.sku);
+  const rowName=normKey(b.name || tr.querySelector('.sku-name')?.textContent || '');
+  const rowNm=String(b.nmId||'');
+  const scSku=normKey(sc.sku);
+  const scName=normKey(sc.productName);
+  if(scSku && rowSku && scSku===rowSku) return 100;
+  if(scSku && rowNm && scSku===rowNm) return 95;
+  if(scName && rowName && scName===rowName) return 90;
+  if(scName && rowName && (rowName.includes(scName) || scName.includes(rowName))) return 60;
+  if(scSku && rowSku && (rowSku.includes(scSku) || scSku.includes(rowSku))) return 55;
+  return 0;
+}
+function ensureWarehouseOption(tr,value,label){
+  const sel=tr.querySelector('[data-key="warehouse"]'); if(!sel || !value) return;
+  if(!Array.from(sel.options).some(o=>o.value===value)){
+    const opt=document.createElement('option'); opt.value=value; opt.textContent=label||value.replace('__calc_manual__:',''); sel.appendChild(opt);
+  }
+}
+function applyCalcScenarioToRow(tr, sc, onlyMissing=false){
+  const keys=['scheme','priceSpp','sppPct','cost','commissionPct','warehouse','lengthCm','widthCm','heightCm','logistics','storage','drr','taxPct','other'];
+  if(sc.warehouse && String(sc.warehouse).startsWith('__calc_manual__:')) ensureWarehouseOption(tr, sc.warehouse, sc.manualWarehouseName||sc.warehouse.replace('__calc_manual__:',''));
+  keys.forEach(key=>{
+    const val=sc[key];
+    if(val===undefined || val===null || val==='') return;
+    const el=tr.querySelector(`[data-key="${key}"]`); if(!el) return;
+    if(onlyMissing && num(el.value)!==0 && String(el.value||'').trim()!=='') return;
+    el.value=(typeof val==='number') ? (Math.round(val*100)/100).toString().replace('.', ',') : val;
+    el.classList.add('changed');
+  });
+  recalcRow(tr);
+}
+function applyCalcScenarios(onlyMissing=false){
+  if(!calcScenarios || !calcScenarios.length){ alert('В калькуляторе юнитки нет сохранённых сценариев. Сначала сохрани расчёты в разделе «Калькулятор юнитки».'); return; }
+  const parsed=calcScenarios.map(x=>({id:x.id,name:x.name,query:x.query, values:calcScenarioValuesFromQuery(x.query)}));
+  let applied=0, noMatch=0;
+  rows.forEach(tr=>{
+    let best=null, score=0;
+    parsed.forEach(sc=>{ const s=rowMatchScore(tr, sc.values); if(s>score){score=s; best=sc;} });
+    if(best && score>=55){ applyCalcScenarioToRow(tr,best.values,onlyMissing); applied++; }
+    else noMatch++;
+  });
+  applyFilters();
+  document.getElementById('scenarioStatus').textContent = (onlyMissing?'Заполнены пустые поля':'Подтянуты настройки') + ' из калькулятора: ' + applied + ' SKU' + (noMatch?(' · без совпадения: '+noMatch):'');
+}
+
 document.addEventListener('input',e=>{ if(e.target.classList.contains('js-field')){ const tr=e.target.closest('tr'); if(e.target.classList.contains('dimension-input')) applyTariff(tr); else {recalcRow(tr); updateTotals();} } if(['filterMargin'].includes(e.target.id)) applyFilters(); });
 document.addEventListener('change',e=>{ if(e.target.classList.contains('warehouse-input') || e.target.classList.contains('scheme-input')) applyTariff(e.target.closest('tr')); if(e.target.id && e.target.id.startsWith('filter')) applyFilters(); });
 document.getElementById('targetMarginInput').addEventListener('input', recalcAll);
@@ -166,10 +258,14 @@ document.getElementById('saveScenarioBtn').onclick=async()=>{ const name=(docume
 document.getElementById('loadScenarioBtn').onclick=async()=>{ const id=document.getElementById('scenarioSelect').value; if(!id) return alert('Выбери сценарий.'); try{ const item=await getScenario(id); applyScenarioPayload(item.payload); document.getElementById('scenarioName').value=item.name; document.getElementById('scenarioStatus').textContent='Загружен сценарий: '+item.name; }catch(e){ alert('Не удалось загрузить: '+e.message); } };
 document.getElementById('deleteScenarioBtn').onclick=async()=>{ const id=document.getElementById('scenarioSelect').value; if(!id) return alert('Выбери сценарий.'); if(!confirm('Удалить сценарий?')) return; try{ await api('/api/unit-matrix-scenarios/'+id,{method:'DELETE'}); document.getElementById('scenarioStatus').textContent='Сценарий удалён'; await loadScenarioList(); }catch(e){ alert('Не удалось удалить: '+e.message); } };
 document.getElementById('compareScenarioBtn').onclick=async()=>{ const id=document.getElementById('compareScenarioSelect').value; if(!id) return alert('Выбери сценарий для сравнения.'); try{ const other=await getScenario(id); showCompare('Сравнение текущей таблицы с сохранённым сценарием: '+other.name, currentPayload(), other.payload); document.getElementById('scenarioStatus').textContent='Сравнение с сохранённым сценарием активно'; }catch(e){ alert('Не удалось сравнить: '+e.message); } };
+document.getElementById('applyCalcScenariosBtn').onclick=()=>applyCalcScenarios(false);
+document.getElementById('fillMissingCalcScenariosBtn').onclick=()=>applyCalcScenarios(true);
+document.getElementById('applyCalcScenariosBtn').onclick=()=>applyCalcScenarios(false);
+document.getElementById('fillMissingCalcScenariosBtn').onclick=()=>applyCalcScenarios(true);
 hydrate();
 loadScenarioList();
 </script>
-<footer>Интерактивная SKU-юнитка v39.1 · исправление пересчёта и сценариев</footer></div></body></html>
+<footer>Интерактивная SKU-юнитка v40 · связка с калькулятором юнитки</footer></div></body></html>
 """
 
 
@@ -1750,6 +1846,7 @@ def _unit_matrix_row_from_summary(row: Any, detail: dict[str, Any] | None = None
     name = str(getattr(row, "name", "") or sku or "Товар")
     data = {
         "sku": sku,
+        "name": name,
         "nmId": int(nm_id) if nm_id else 0,
         "scheme": "fbs",
         "priceSpp": round(price, 2),
@@ -3747,6 +3844,29 @@ def _list_unit_matrix_scenarios(limit: int = 100) -> list[dict[str, Any]]:
         logger.exception("Не удалось получить сценарии SKU-юнитки")
         return []
 
+
+
+def _list_unit_calc_scenarios(limit: int = 300) -> list[dict[str, Any]]:
+    if not database_enabled():
+        return []
+    try:
+        _ensure_scenario_table()
+        with _scenario_connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT id, name, query, created_at, updated_at
+                    FROM unit_calc_scenarios
+                    ORDER BY updated_at DESC, id DESC
+                    LIMIT %s
+                    """,
+                    (limit,),
+                )
+                return [_scenario_payload(row) for row in cursor.fetchall()]
+    except Exception:
+        logger.exception("Не удалось получить сценарии калькулятора юнитки")
+        return []
+
 @app.get("/unit-matrix")
 def unit_matrix():
     if not database_enabled():
@@ -3827,6 +3947,7 @@ def unit_matrix():
         brands=brands,
         period_label=period_label,
         matrix_scenarios=[{k: v for k, v in item.items() if k != "payload"} for item in _list_unit_matrix_scenarios(200)],
+        calc_scenarios=_list_unit_calc_scenarios(500),
         money=_money,
         percent=_percent,
         units=_units,
