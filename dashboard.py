@@ -167,13 +167,9 @@ document.getElementById('loadScenarioBtn').onclick=async()=>{ const id=document.
 document.getElementById('deleteScenarioBtn').onclick=async()=>{ const id=document.getElementById('scenarioSelect').value; if(!id) return alert('Выбери сценарий.'); if(!confirm('Удалить сценарий?')) return; try{ await api('/api/unit-matrix-scenarios/'+id,{method:'DELETE'}); document.getElementById('scenarioStatus').textContent='Сценарий удалён'; await loadScenarioList(); }catch(e){ alert('Не удалось удалить: '+e.message); } };
 document.getElementById('compareScenarioBtn').onclick=async()=>{ const id=document.getElementById('compareScenarioSelect').value; if(!id) return alert('Выбери сценарий для сравнения.'); try{ const other=await getScenario(id); showCompare('Сравнение текущей таблицы с сохранённым сценарием: '+other.name, currentPayload(), other.payload); document.getElementById('scenarioStatus').textContent='Сравнение с сохранённым сценарием активно'; }catch(e){ alert('Не удалось сравнить: '+e.message); } };
 hydrate();
-loadScenarioList(); document.getElementById('scenarioStatus').textContent='Изменения сброшены';};
-document.getElementById('restoreWbBtn').onclick=()=>{hydrate(); document.getElementById('scenarioStatus').textContent='Вернули фактическую базу WB';};
-document.getElementById('compareBtn').onclick=()=>{updateTotals(); document.getElementById('scenarioStatus').textContent='Сравнение активно: смотри колонку «Влияние»';};
-document.getElementById('saveScenarioBtn').onclick=()=>{ const name=prompt('Название сценария'); if(!name) return; const data=rows.map(tr=>({sku:tr._base.sku, values:values(tr)})); const key='wb_unit_matrix_scenario_'+Date.now(); localStorage.setItem(key, JSON.stringify({name, savedAt:new Date().toISOString(), data})); document.getElementById('scenarioStatus').textContent='Сценарий сохранён в браузере: '+name; };
-hydrate();
+loadScenarioList();
 </script>
-<footer>Интерактивная SKU-юнитка v38 · цена с СПП, FBS/FBW, ручные FBS-склады, фото и ссылки WB</footer></div></body></html>
+<footer>Интерактивная SKU-юнитка v39.1 · исправление пересчёта и сценариев</footer></div></body></html>
 """
 
 
