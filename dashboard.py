@@ -148,7 +148,7 @@ function updateTotals(){ const t=aggregateTotals(); document.getElementById('vis
 function tariffFor(v){ if(v.warehouse==='__fbs_vladikavkaz__' || v.warehouse==='__fbs_manual__') return null; const map=tariffMaps[v.scheme] || {}; return map[v.warehouse] || null; }
 function applyTariff(tr){ const v=values(tr); const t=tariffFor(v); if(!t) { recalcRow(tr); updateTotals(); return; } const liters=chargeLiters(v.volume); const logRub=(t.base||0) + Math.max(0,liters-1)*(t.liter||0); const storageRub=(t.storageBase||0) + Math.max(0,liters-1)*(t.storageLiter||0); const log=tr.querySelector('[data-key="logistics"]'); const st=tr.querySelector('[data-key="storage"]'); log.value=String(Math.round(logRub*100)/100).replace('.', ','); st.value=String(Math.round(storageRub*100)/100).replace('.', ','); recalcRow(tr); updateTotals(); }
 function applyFilters(doTotals=true){ const fc=document.getElementById('filterCategory').value, fb=document.getElementById('filterBrand').value, fw=document.getElementById('filterWarehouse').value, fs=document.getElementById('filterStatus').value, fm=num(document.getElementById('filterMargin').value); rows.forEach(tr=>{let ok=true; if(fc&&tr.dataset.category!==fc) ok=false; if(fb&&tr.dataset.brand!==fb) ok=false; if(fw&&tr.dataset.warehouse!==fw) ok=false; if(fs&&tr.dataset.status!==fs) ok=false; if(fm&&num(tr.dataset.margin)<fm) ok=false; tr.style.display=ok?'':'none';}); if(doTotals) updateTotals(); }
-function currentPayload(){ return {version:41, savedAt:new Date().toISOString(), targetMargin:num(document.getElementById('targetMarginInput').value), rows:rows.map(tr=>({sku:tr._base.sku, nmId:tr._base.nmId, name:tr.querySelector('.sku-name')?.textContent?.trim()||tr._base.sku, values:values(tr), calc:tr._calc, baseProfit:tr._base.baseProfit||0}))}; }
+function currentPayload(){ return {version:41.1, savedAt:new Date().toISOString(), targetMargin:num(document.getElementById('targetMarginInput').value), rows:rows.map(tr=>({sku:tr._base.sku, nmId:tr._base.nmId, name:tr.querySelector('.sku-name')?.textContent?.trim()||tr._base.sku, values:values(tr), calc:tr._calc, baseProfit:tr._base.baseProfit||0}))}; }
 function renderScenarioSelects(){ const selects=[document.getElementById('scenarioSelect'), document.getElementById('compareScenarioSelect')]; selects.forEach(sel=>{ if(!sel) return; const cur=sel.value; sel.innerHTML='<option value="">— выбрать сценарий —</option>' + savedScenarios.map(x=>`<option value="${x.id}">${escapeHtml(x.name)} · ${escapeHtml(x.updated_at||'')}</option>`).join(''); sel.value=cur; }); }
 function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 async function api(url, options={}){ const resp=await fetch(url,{headers:{'Content-Type':'application/json'},...options}); if(!resp.ok){let msg='Ошибка запроса'; try{msg=(await resp.json()).error||msg}catch(e){} throw new Error(msg)} if(resp.status===204) return {}; return await resp.json(); }
@@ -169,7 +169,9 @@ function calcScenarioValuesFromQuery(query){
   const lengthCm=n('length_cm',0), widthCm=n('width_cm',0), heightCm=n('height_cm',0);
   const volume=Math.max(0,lengthCm*widthCm*heightCm/1000);
   const baseLog=n('base_logistics',0) + Math.max(0, volume-1)*n('extra_liter_cost',0);
-  const outbound=baseLog * Math.max(0,n('localization_pct',1)) * Math.max(0,n('irp',1));
+  const locCoef = Math.max(0.0001, n('localization_pct',1) || 1);
+  const irpCoef = Math.max(0.0001, n('irp',1) || 1);
+  const outbound=baseLog * locCoef * irpCoef;
   const logistics=outbound/buyout + n('return_logistics',0)*(1-buyout)/buyout;
   const purchase=n('purchase_price',0);
   const other=n('acceptance',0)+n('mp_delivery',0)+n('packaging_cost',0)+n('tariff_options',0)+n('other_cost',0)+purchase*rate('defect_pct',0);
@@ -265,7 +267,7 @@ document.getElementById('fillMissingCalcScenariosBtn').onclick=()=>applyCalcScen
 hydrate();
 loadScenarioList();
 </script>
-<footer>Интерактивная SKU-юнитка v40 · связка с калькулятором юнитки</footer></div></body></html>
+<footer>Интерактивная SKU-юнитка v41.1 · связка с калькулятором юнитки</footer></div></body></html>
 """
 
 
@@ -324,7 +326,7 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 <div class="field"><label>{% if values.warehouse_mode == 'manual' %}Мой FBS-склад{% else %}Склад WB{% endif %}</label>{% if values.warehouse_mode == 'manual' %}<input name="warehouse" list="manualFbsPoints" value="{{ values.warehouse }}" placeholder="Например, СЦ Владикавказ"><datalist id="manualFbsPoints">{% for wh in manual_warehouses %}<option value="{{ wh }}">{% endfor %}</datalist>{% elif warehouse_options %}<select name="warehouse" id="warehouseSelect"><option value="">Выбери склад WB</option>{% if values.warehouse and values.warehouse not in warehouse_options %}<option value="{{ values.warehouse }}" selected>{{ values.warehouse }}</option>{% endif %}{% for wh in warehouse_options %}<option value="{{ wh }}" {% if values.warehouse == wh %}selected{% endif %}>{{ wh }}</option>{% endfor %}</select>{% else %}<input name="warehouse" value="{{ values.warehouse }}" placeholder="Например, Коледино / Электросталь">{% endif %}<div class="hint" style="margin-top:6px">В режиме WB список берётся из тарифов. В ручном FBS-режиме можно указать любой СЦ и заполнить тарифы вручную или по фактическим продажам.</div></div>
 <div class="field"><label>Дата тарифов WB</label><input type="date" name="tariff_date" value="{{ values.tariff_date }}"></div>
 <div class="field"><label>Индекс локализации, %</label><input inputmode="decimal" name="localization_pct" value="{{ percent_input(values.localization_pct) }}"></div>
-<div class="field"><label>ИРП / коэффициент</label><input inputmode="decimal" name="irp" value="{{ number_input(values.irp) }}"></div>
+<div class="field"><label>ИРП / коэффициент</label><input inputmode="decimal" name="irp" value="{{ number_input(values.irp) }}"><div class="hint" style="margin-top:6px">Если поле пустое или 0 — считается как коэффициент 1. Иначе прямая логистика обнулится.</div></div>
 <div class="field"><label>Длина, см</label><input inputmode="decimal" name="length_cm" value="{{ number_input(values.length_cm) }}"></div>
 <div class="field"><label>Ширина, см</label><input inputmode="decimal" name="width_cm" value="{{ number_input(values.width_cm) }}"></div>
 <div class="field"><label>Высота, см</label><input inputmode="decimal" name="height_cm" value="{{ number_input(values.height_cm) }}"></div>
@@ -1471,8 +1473,8 @@ def _unit_calculator_values(product_summary=None) -> DotDict:
         "warehouse_mode": request.args.get("warehouse_mode", "api").strip().lower() if request.args.get("warehouse_mode", "api").strip().lower() in {"api", "manual"} else "api",
         "warehouse": request.args.get("warehouse", "").strip()[:100],
         "tariff_date": _query_tariff_date(),
-        "localization_pct": _query_rate("localization_pct", 1, min_value=0, max_value=10),
-        "irp": max(0.0, _query_float("irp", 1)),
+        "localization_pct": max(0.0001, _query_rate("localization_pct", 1, min_value=0, max_value=10) or 1),
+        "irp": max(0.0001, _query_float("irp", 1) or 1),
         "length_cm": max(0.0, _query_float("length_cm", 0)),
         "width_cm": max(0.0, _query_float("width_cm", 0)),
         "height_cm": max(0.0, _query_float("height_cm", 0)),
@@ -1504,7 +1506,15 @@ def _calculate_unit_plan(values: DotDict) -> tuple[DotDict, list[dict[str, str]]
     buyout = max(0.0001, min(1.0, float(values.buyout_pct or 0)))
     volume_liters = max(0.0, float(values.length_cm or 0) * float(values.width_cm or 0) * float(values.height_cm or 0) / 1000.0)
     base_logistics = float(values.base_logistics or 0) + max(0.0, volume_liters - 1.0) * float(values.extra_liter_cost or 0)
-    outbound_logistics = base_logistics * float(values.localization_pct or 0) * float(values.irp or 0)
+    # Empty/zero coefficients should not silently zero out the whole logistics calculation.
+    # Treat 0 as 1: base tariff remains active; user can still change the coefficient above 1 if needed.
+    localization_coef = float(values.localization_pct or 1.0)
+    if localization_coef <= 0:
+        localization_coef = 1.0
+    irp_coef = float(values.irp or 1.0)
+    if irp_coef <= 0:
+        irp_coef = 1.0
+    outbound_logistics = base_logistics * localization_coef * irp_coef
     logistics_per_buyout = outbound_logistics / buyout + float(values.return_logistics or 0) * (1.0 - buyout) / buyout
     storage = float(values.turnover_days or 0) * float(values.storage_per_day or 0)
     purchase = float(values.purchase_price or 0)
