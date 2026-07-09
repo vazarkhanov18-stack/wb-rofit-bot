@@ -113,7 +113,7 @@ PRODUCTS_TEMPLATE = r"""
 
 UNIT_MATRIX_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>SKU-юнитка · WB Profit</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
-<header><div><h1>Интерактивная юнит-экономика по SKU</h1><div class="subtitle">Excel-like таблица: цена с СПП, схема FBS/FBW, ручные FBS-склады, тарифы, фото и ссылки WB прямо в строке</div></div><div class="badge">Факт + сценарии · v40</div></header>
+<header><div><h1>Интерактивная юнит-экономика по SKU</h1><div class="subtitle">Excel-like таблица: факт WB отдельно от сценария, цена с СПП, схема FBS/FBW, ручные FBS-склады, тарифы, фото и ссылки WB прямо в строке</div></div><div class="badge">Факт + сценарии · v40</div></header>
 <nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a class="active" href="/unit-matrix">SKU-юнитка</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><label>Период<select name="period_type"><option value="actual" {% if selected_type == 'actual' %}selected{% endif %}>Актуально без дублей</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select></label><label>С даты<input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату<input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск<input name="q" value="{{ query }}" placeholder="товар / артикул / nmID"></label><label>Целевая маржа, %<input id="targetMarginInput" name="target_margin" inputmode="decimal" value="{{ target_margin_input }}"></label><button type="submit">Показать</button></form>
 <div class="hint">Фактический режим показывает базовую юнит-экономику из сохранённых отчётов. Изменения в таблице — это <b>сценарий</b>: они не затирают данные WB и не меняют себестоимость в базе, пока ты отдельно не сохранишь её в разделе «Себестоимость и расходы».</div>
@@ -148,7 +148,7 @@ function updateTotals(){ const t=aggregateTotals(); document.getElementById('vis
 function tariffFor(v){ if(v.warehouse==='__fbs_vladikavkaz__' || v.warehouse==='__fbs_manual__') return null; const map=tariffMaps[v.scheme] || {}; return map[v.warehouse] || null; }
 function applyTariff(tr){ const v=values(tr); const t=tariffFor(v); if(!t) { recalcRow(tr); updateTotals(); return; } const liters=chargeLiters(v.volume); const logRub=(t.base||0) + Math.max(0,liters-1)*(t.liter||0); const storageRub=(t.storageBase||0) + Math.max(0,liters-1)*(t.storageLiter||0); const log=tr.querySelector('[data-key="logistics"]'); const st=tr.querySelector('[data-key="storage"]'); log.value=String(Math.round(logRub*100)/100).replace('.', ','); st.value=String(Math.round(storageRub*100)/100).replace('.', ','); recalcRow(tr); updateTotals(); }
 function applyFilters(doTotals=true){ const fc=document.getElementById('filterCategory').value, fb=document.getElementById('filterBrand').value, fw=document.getElementById('filterWarehouse').value, fs=document.getElementById('filterStatus').value, fm=num(document.getElementById('filterMargin').value); rows.forEach(tr=>{let ok=true; if(fc&&tr.dataset.category!==fc) ok=false; if(fb&&tr.dataset.brand!==fb) ok=false; if(fw&&tr.dataset.warehouse!==fw) ok=false; if(fs&&tr.dataset.status!==fs) ok=false; if(fm&&num(tr.dataset.margin)<fm) ok=false; tr.style.display=ok?'':'none';}); if(doTotals) updateTotals(); }
-function currentPayload(){ return {version:42, savedAt:new Date().toISOString(), targetMargin:num(document.getElementById('targetMarginInput').value), rows:rows.map(tr=>({sku:tr._base.sku, nmId:tr._base.nmId, name:tr.querySelector('.sku-name')?.textContent?.trim()||tr._base.sku, values:values(tr), calc:tr._calc, baseProfit:tr._base.baseProfit||0}))}; }
+function currentPayload(){ return {version:43, savedAt:new Date().toISOString(), targetMargin:num(document.getElementById('targetMarginInput').value), rows:rows.map(tr=>({sku:tr._base.sku, nmId:tr._base.nmId, name:tr.querySelector('.sku-name')?.textContent?.trim()||tr._base.sku, values:values(tr), calc:tr._calc, baseProfit:tr._base.baseProfit||0}))}; }
 function renderScenarioSelects(){ const selects=[document.getElementById('scenarioSelect'), document.getElementById('compareScenarioSelect')]; selects.forEach(sel=>{ if(!sel) return; const cur=sel.value; sel.innerHTML='<option value="">— выбрать сценарий —</option>' + savedScenarios.map(x=>`<option value="${x.id}">${escapeHtml(x.name)} · ${escapeHtml(x.updated_at||'')}</option>`).join(''); sel.value=cur; }); }
 function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 async function api(url, options={}){ const resp=await fetch(url,{headers:{'Content-Type':'application/json'},...options}); if(!resp.ok){let msg='Ошибка запроса'; try{msg=(await resp.json()).error||msg}catch(e){} throw new Error(msg)} if(resp.status===204) return {}; return await resp.json(); }
@@ -171,7 +171,7 @@ function calcScenarioValuesFromQuery(query){
   const baseLog=n('base_logistics',0) + Math.max(0, volume-1)*n('extra_liter_cost',0);
   const locCoef = Math.max(0.0001, n('localization_pct',1) || 1);
   const outbound=baseLog * locCoef;
-  const logistics=outbound/buyout + n('return_logistics',0)*(1-buyout)/buyout;
+  const logistics=outbound + n('return_logistics',0)*(1-buyout)/buyout;
   const purchase=n('purchase_price',0);
   const other=n('acceptance',0)+n('mp_delivery',0)+n('packaging_cost',0)+n('tariff_options',0)+n('other_cost',0)+purchase*rate('defect_pct',0);
   const storage=n('turnover_days',0)*n('storage_per_day',0);
@@ -307,6 +307,7 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 <form method="get" class="section">
 <div class="card"><div class="section-head"><div><h2>1. Основные расходы</h2><div class="subtitle">Товар, цена, СПП, выкуп, комиссия и закупка</div></div></div>
 <div class="form-grid">
+<div class="field"><label>Режим расчёта</label><select name="calc_mode"><option value="plan" {% if values.calc_mode == 'plan' %}selected{% endif %}>План по тарифам/ручным данным</option><option value="fact" {% if values.calc_mode == 'fact' %}selected{% endif %}>Факт WB из отчётов</option><option value="scenario" {% if values.calc_mode == 'scenario' %}selected{% endif %}>Сценарий от факта</option></select><div class="hint" style="margin-top:6px">План считает по твоим тарифам и габаритам. Факт лучше смотреть через кнопку фактической логистики из продаж. Сценарий не затирает данные WB.</div></div>
 <div class="field"><label>Товар / артикул</label><select name="sku"><option value="">Новый товар / вручную</option>{% for p in products %}<option value="{{ p.sku }}" {% if values.sku == p.sku %}selected{% endif %}>{{ p.name or p.sku }} · {{ p.sku }}</option>{% endfor %}</select></div>
 <div class="field"><label>Название товара</label><input name="product_name" value="{{ values.product_name }}" placeholder="Например, креатин 300 г"></div>
 <div class="field"><label>Схема продажи</label><select name="scheme"><option value="fbs" {% if values.scheme == 'fbs' %}selected{% endif %}>FBS</option><option value="fbw" {% if values.scheme == 'fbw' %}selected{% endif %}>FBW</option></select></div>
@@ -381,7 +382,9 @@ UNIT_CALCULATOR_TEMPLATE = r"""
 </div>
 
 <div class="section two-col"><div class="card"><div class="section-head"><div><h2>Расчёт по строкам</h2><div class="subtitle">Как на калькуляторе: партия, юнитка и доля в выручке</div></div></div><div class="table-wrap"><table style="min-width:960px"><thead><tr><th>Показатель</th><th>Партия</th><th>Unit-экономика</th><th>Доля в выручке</th></tr></thead><tbody>{% for row in breakdown %}<tr><td>{{ row.label }}</td><td class="{{ row.cls }}">{{ row.batch }}</td><td class="{{ row.cls }}">{{ row.unit }}</td><td>{{ row.share }}</td></tr>{% endfor %}</tbody></table></div></div>
-<div class="card"><h2>Пояснение</h2><div class="hint"><b>Цена с СПП</b> — это цена, которую видит покупатель. Если указан СПП %, калькулятор считает <b>расчётную цену до СПП</b> и уже от неё считает комиссию, ДРР, налог и прибыль. <b>Выкуп</b> влияет только на логистику: логистика к покупателю делится на процент выкупа, а обратная логистика добавляется на невыкупленные заказы. <b>Объём</b> считается без округления: 1,57 л остаётся 1,57 л. Для FBS-СЦ, которого нет в тарифах WB, используй режим <b>Мой FBS-склад вручную</b> или кнопку фактической логистики из продаж. Колонка <b>Партия</b> считается по количеству закупа, поэтому при закупе 1 шт. она совпадает с unit-экономикой.</div><div class="summary" style="margin-top:14px"><span>Схема: {{ values.scheme|upper }}</span><span>Упаковка: {{ 'Монопаллета' if values.package_type == 'mono' else 'Короб' }}</span><span>Режим склада: {{ 'ручной FBS' if values.warehouse_mode == 'manual' else 'тарифы WB' }}</span><span>Склад: {{ values.warehouse or 'не указан' }}</span><span>Цена с СПП: {{ money(calc.price_spp) if calc.price_spp else '—' }}</span><span>Расчётная цена до СПП: {{ money(calc.price_before_spp) if calc.price_before_spp else '—' }}</span></div></div></div>
+<div class="card"><h2>Пояснение</h2><div class="hint"><b>Цена с СПП</b> — это цена, которую видит покупатель. Если указан СПП %, калькулятор считает <b>расчётную цену до СПП</b> и уже от неё считает комиссию, ДРР, налог и прибыль. <b>Выкуп</b> теперь влияет только на обратную логистику/невыкупы: прямая логистика не делится на процент выкупа. <b>Объём</b> считается без округления: 1,57 л остаётся 1,57 л. Для FBS-СЦ, которого нет в тарифах WB, используй режим <b>Мой FBS-склад вручную</b> или кнопку фактической логистики из продаж. Колонка <b>Партия</b> считается по количеству закупа, поэтому при закупе 1 шт. она совпадает с unit-экономикой.</div><div class="summary" style="margin-top:14px"><span>Режим: {{ {'plan':'План','fact':'Факт WB','scenario':'Сценарий'}[values.calc_mode] if values.calc_mode in ['plan','fact','scenario'] else 'План' }}</span><span>Схема: {{ values.scheme|upper }}</span><span>Упаковка: {{ 'Монопаллета' if values.package_type == 'mono' else 'Короб' }}</span><span>Режим склада: {{ 'ручной FBS' if values.warehouse_mode == 'manual' else 'тарифы WB' }}</span><span>Склад: {{ values.warehouse or 'не указан' }}</span><span>Цена с СПП: {{ money(calc.price_spp) if calc.price_spp else '—' }}</span><span>Расчётная цена до СПП: {{ money(calc.price_before_spp) if calc.price_before_spp else '—' }}</span></div></div></div>
+
+<div class="section card"><div class="section-head"><div><h2>Аудит формулы</h2><div class="subtitle">Проверка, что именно участвует в расчёте и откуда берётся логистика</div></div></div><div class="grid"><div class="card"><div class="label">Цена с СПП</div><div class="value">{{ money(calc.price_spp) }}</div></div><div class="card"><div class="label">Цена до СПП</div><div class="value">{{ money(calc.price_before_spp) }}</div></div><div class="card"><div class="label">Объём</div><div class="value">{{ number(calc.volume_liters) }} л</div></div><div class="card"><div class="label">Прямая логистика</div><div class="value">{{ money(calc.outbound_logistics) }}</div></div><div class="card"><div class="label">Невыкуп / возврат</div><div class="value">{{ money(calc.return_burden) }}</div></div><div class="card"><div class="label">Логистика всего</div><div class="value">{{ money(calc.logistics_per_buyout) }}</div></div></div><div class="hint" style="margin-top:12px">Формула плана: цена до СПП − комиссия WB − прямая логистика − нагрузка невыкупов − хранение − приёмка − реклама − налог − себестоимость − прочие расходы. Если хочешь сверяться с отчётами WB, используй фактическую логистику из продаж: отчёты WB могут списывать хранение, приёмку, возвраты и корректировки отдельными строками и не всегда в день конкретной продажи.</div></div>
 {% endif %}
 
 <script>
@@ -1493,6 +1496,7 @@ def _unit_calculator_values(product_summary=None) -> DotDict:
         "sku": selected_sku,
         "product_name": selected_name,
         "scheme": request.args.get("scheme", "fbs").strip().lower() if request.args.get("scheme", "fbs").strip().lower() in {"fbs", "fbw"} else "fbs",
+        "calc_mode": request.args.get("calc_mode", "plan").strip().lower() if request.args.get("calc_mode", "plan").strip().lower() in {"plan", "fact", "scenario"} else "plan",
         "price_spp": _query_float("price_spp", avg_price),
         "spp_pct": _query_rate("spp_pct", 0),
         "buyout_pct": _query_rate("buyout_pct", 1, min_value=0.0001, max_value=1),
@@ -1541,7 +1545,10 @@ def _calculate_unit_plan(values: DotDict) -> tuple[DotDict, list[dict[str, str]]
     if localization_coef <= 0:
         localization_coef = 1.0
     outbound_logistics = base_logistics * localization_coef
-    logistics_per_buyout = outbound_logistics / buyout + float(values.return_logistics or 0) * (1.0 - buyout) / buyout
+    # Плановая юнитка: прямая логистика к покупателю не делится на процент выкупа.
+    # Процент выкупа распределяет только обратную логистику/невыкупы на одну выкупленную единицу.
+    return_burden = float(values.return_logistics or 0) * (1.0 - buyout) / buyout
+    logistics_per_buyout = outbound_logistics + return_burden
     storage = float(values.turnover_days or 0) * float(values.storage_per_day or 0)
     purchase = float(values.purchase_price or 0)
     commission = price * float(values.commission_pct or 0)
@@ -1582,6 +1589,7 @@ def _calculate_unit_plan(values: DotDict) -> tuple[DotDict, list[dict[str, str]]
         "spp_discount_amount": spp_discount_amount,
         "volume_liters": volume_liters,
         "outbound_logistics": outbound_logistics,
+        "return_burden": return_burden,
         "logistics_per_buyout": logistics_per_buyout,
         "storage": storage,
         "commission": commission,
@@ -1633,7 +1641,9 @@ def _calculate_unit_plan(values: DotDict) -> tuple[DotDict, list[dict[str, str]]
         row("Расходы всего", total_costs),
         row("Вложения в товар", purchase),
         row("Комиссия WB", commission),
-        row("Логистика WB с учётом выкупа", logistics_per_buyout),
+        row("Прямая логистика WB", outbound_logistics),
+        row("Невыкуп / обратная логистика", return_burden),
+        row("Логистика WB всего", logistics_per_buyout),
         row("Хранение", storage),
         row("Приёмка", float(values.acceptance or 0)),
         row("Реклама", advertising),
