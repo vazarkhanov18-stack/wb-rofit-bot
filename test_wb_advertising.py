@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import unittest
 from datetime import date
+from unittest.mock import Mock, patch
 
 from wb_advertising import (
+    WBRateLimitError,
     aggregate_fullstats,
     classify_sku_advertising,
     extract_campaign_catalog,
@@ -262,6 +264,61 @@ class AdvertisingAggregationTests(unittest.TestCase):
         self.assertEqual(result["status"], "OK")
         self.assertEqual(len(fullstats_calls), 4)
         self.assertEqual([len(call["ids"].split(",")) for call in fullstats_calls], [50, 1, 50, 1])
+
+    def test_fullstats_429_uses_retry_after_and_retries_only_once(self):
+        fullstats_calls = 0
+        sleep = Mock()
+
+        def request_json(method, url, **kwargs):
+            nonlocal fullstats_calls
+            if url.endswith("promotion/count"):
+                return {"adverts": [{"type": 9, "status": 9, "advert_list": [{"advertId": 1}]}]}
+            if url.endswith("/api/advert/v2/adverts"):
+                return {"adverts": []}
+            fullstats_calls += 1
+            if fullstats_calls == 1:
+                raise WBRateLimitError(retry_after="7", retry_after_seconds=7)
+            return [_campaign(1, 123, 1000, 5000, 5)]
+
+        result = fetch_advertising_stats(
+            request_json,
+            date(2026, 5, 1),
+            date(2026, 5, 31),
+            pause_seconds=0,
+            sleep_fn=sleep,
+        )
+        self.assertEqual(result["status"], "OK")
+        self.assertEqual(fullstats_calls, 2)
+        sleep.assert_called_once_with(7)
+        self.assertEqual(result["by_nm"][123]["factual_drr"], 20)
+
+    def test_repeated_429_is_not_passed_to_json_parser(self):
+        fullstats_calls = 0
+        sleep = Mock()
+
+        def request_json(method, url, **kwargs):
+            nonlocal fullstats_calls
+            if url.endswith("promotion/count"):
+                return {"adverts": [{"type": 9, "status": 9, "advert_list": [{"advertId": 1}]}]}
+            if url.endswith("/api/advert/v2/adverts"):
+                return {"adverts": []}
+            fullstats_calls += 1
+            raise WBRateLimitError(retry_after=None, retry_after_seconds=None)
+
+        with patch("wb_advertising.aggregate_fullstats") as parser:
+            result = fetch_advertising_stats(
+                request_json,
+                date(2026, 5, 1),
+                date(2026, 5, 31),
+                pause_seconds=0,
+                sleep_fn=sleep,
+            )
+        self.assertEqual(fullstats_calls, 2)
+        self.assertEqual(result["status"], "API_ERROR")
+        self.assertTrue(result["rate_limited"])
+        self.assertEqual(result["warnings"], ["WB временно ограничил получение рекламной статистики. Повторите позже"])
+        sleep.assert_called_once_with(20.1)
+        parser.assert_not_called()
 
     def test_catalog_uses_only_fullstats_supported_statuses(self):
         catalog = extract_campaign_catalog(

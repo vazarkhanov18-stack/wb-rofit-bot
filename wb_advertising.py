@@ -10,8 +10,19 @@ ELIGIBLE_CAMPAIGN_STATUSES = {7, 9, 11}
 ACTIVE_CAMPAIGN_STATUS = 9
 FULLSTATS_MAX_DAYS = 31
 FULLSTATS_MAX_CAMPAIGNS = 50
+FULLSTATS_RATE_LIMIT_DELAY = 20.1
 
 logger = logging.getLogger("wb-profit-dashboard.advertising")
+
+
+class WBRateLimitError(RuntimeError):
+    """HTTP 429 from WB with a safe, parsed Retry-After value."""
+
+    def __init__(self, *, retry_after: str | None = None, retry_after_seconds: float | None = None):
+        super().__init__("WB API rate limit")
+        self.status_code = 429
+        self.retry_after = retry_after
+        self.retry_after_seconds = retry_after_seconds
 
 
 def split_date_range(date_from: date, date_to: date, max_days: int = FULLSTATS_MAX_DAYS) -> list[tuple[date, date]]:
@@ -260,6 +271,16 @@ def fetch_advertising_stats(
     try:
         count_payload = request_json("GET", "https://advert-api.wildberries.ru/adv/v1/promotion/count")
         catalog = extract_campaign_catalog(count_payload)
+    except WBRateLimitError as exc:
+        return _fetch_result(
+            {},
+            "API_ERROR",
+            ["WB временно ограничил получение рекламной статистики. Повторите позже"],
+            fetched_at,
+            rate_limited=True,
+            retry_after=exc.retry_after,
+            retry_attempt=0,
+        )
     except Exception as exc:
         return _fetch_result({}, "API_ERROR", [f"Не удалось получить список рекламных кампаний WB: {exc}"], fetched_at)
     if not catalog:
@@ -284,35 +305,68 @@ def fetch_advertising_stats(
     successful = 0
     failed = 0
     incomplete = False
+    rate_limited = False
+    rate_limit_retry_used = False
+    last_retry_after: str | None = None
+    retry_attempt = 0
     for index, ((chunk_from, chunk_to), batch) in enumerate(requests):
-        try:
-            payload = request_json(
-                "GET",
-                "https://advert-api.wildberries.ru/adv/v3/fullstats",
-                params={
-                    "ids": ",".join(str(value) for value in batch),
-                    "beginDate": chunk_from.isoformat(),
-                    "endDate": chunk_to.isoformat(),
-                },
-                timeout=100,
-            )
-            part_warnings = aggregate_fullstats(
-                payload,
-                catalog,
-                by_nm,
-                requested_from=chunk_from,
-                requested_to=chunk_to,
-                seen=seen,
-            )
-            if part_warnings:
-                incomplete = True
-                warnings.extend(part_warnings)
-            successful += 1
-        except Exception as exc:
-            failed += 1
-            warnings.append(
-                f"Не удалось загрузить рекламу за {chunk_from.isoformat()}–{chunk_to.isoformat()}: {exc}"
-            )
+        while True:
+            try:
+                payload = request_json(
+                    "GET",
+                    "https://advert-api.wildberries.ru/adv/v3/fullstats",
+                    params={
+                        "ids": ",".join(str(value) for value in batch),
+                        "beginDate": chunk_from.isoformat(),
+                        "endDate": chunk_to.isoformat(),
+                    },
+                    timeout=100,
+                )
+                part_warnings = aggregate_fullstats(
+                    payload,
+                    catalog,
+                    by_nm,
+                    requested_from=chunk_from,
+                    requested_to=chunk_to,
+                    seen=seen,
+                )
+                if part_warnings:
+                    incomplete = True
+                    warnings.extend(part_warnings)
+                successful += 1
+                break
+            except WBRateLimitError as exc:
+                rate_limited = True
+                last_retry_after = exc.retry_after
+                if not rate_limit_retry_used:
+                    rate_limit_retry_used = True
+                    retry_attempt = 1
+                    delay = (
+                        exc.retry_after_seconds
+                        if exc.retry_after_seconds is not None
+                        else FULLSTATS_RATE_LIMIT_DELAY
+                    )
+                    logger.warning(
+                        "WB fullstats rate limit: http_status=429 cache_used=false cache_time=none retry_after=%s retry_attempt=1",
+                        exc.retry_after or "absent",
+                    )
+                    sleep_fn(max(0.0, delay))
+                    continue
+                failed += 1
+                warnings.append("WB временно ограничил получение рекламной статистики. Повторите позже")
+                logger.warning(
+                    "WB fullstats rate limit: http_status=429 cache_used=false cache_time=none retry_after=%s retry_attempt=1",
+                    exc.retry_after or "absent",
+                )
+                break
+            except Exception as exc:
+                failed += 1
+                warnings.append(
+                    f"Не удалось загрузить рекламу за {chunk_from.isoformat()}–{chunk_to.isoformat()}: {exc}"
+                )
+                break
+        if rate_limited and failed:
+            break
         if pause_seconds > 0 and index + 1 < len(requests):
             sleep_fn(pause_seconds)
 
@@ -323,7 +377,15 @@ def fetch_advertising_stats(
         status = "PARTIAL_DATA"
     else:
         status = "OK"
-    return _fetch_result(by_nm, status, list(dict.fromkeys(warnings)), fetched_at)
+    return _fetch_result(
+        by_nm,
+        status,
+        list(dict.fromkeys(warnings)),
+        fetched_at,
+        rate_limited=rate_limited and failed > 0,
+        retry_after=last_retry_after,
+        retry_attempt=retry_attempt,
+    )
 
 
 def classify_sku_advertising(
@@ -402,12 +464,19 @@ def _empty_campaign_row(meta: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _fetch_result(by_nm: dict[int, dict[str, Any]], status: str, warnings: list[str], fetched_at: datetime) -> dict[str, Any]:
+def _fetch_result(
+    by_nm: dict[int, dict[str, Any]],
+    status: str,
+    warnings: list[str],
+    fetched_at: datetime,
+    **extra: Any,
+) -> dict[str, Any]:
     return {
         "by_nm": by_nm,
         "status": status,
         "warnings": warnings,
         "fetched_at": fetched_at,
+        **extra,
     }
 
 

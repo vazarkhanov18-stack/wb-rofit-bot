@@ -10,7 +10,9 @@ import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta
+from email.utils import parsedate_to_datetime
 from typing import Any
 from types import SimpleNamespace
 from urllib.parse import quote
@@ -39,7 +41,7 @@ from wb_api import (
     get_seller_warehouses,
     get_wb_warehouse_stocks,
 )
-from wb_advertising import classify_sku_advertising, fetch_advertising_stats
+from wb_advertising import WBRateLimitError, classify_sku_advertising, fetch_advertising_stats
 from wb_unit_math import manual_warehouse_costs
 from wb_management import (
     delete_cost_profile,
@@ -285,6 +287,16 @@ document.getElementById('applyCalcScenariosBtn').onclick=()=>applyCalcScenarios(
 document.getElementById('fillMissingCalcScenariosBtn').onclick=()=>applyCalcScenarios(true);
 document.getElementById('applyCalcScenariosBtn').onclick=()=>applyCalcScenarios(false);
 document.getElementById('fillMissingCalcScenariosBtn').onclick=()=>applyCalcScenarios(true);
+const refreshAdsButton=document.querySelector('button[name="refresh_ads"]');
+if(refreshAdsButton&&refreshAdsButton.form){
+  refreshAdsButton.addEventListener('click',()=>{refreshAdsButton.dataset.requested='1';});
+  refreshAdsButton.form.addEventListener('submit',(event)=>{
+    if(refreshAdsButton.dataset.requested!=='1') return;
+    if(refreshAdsButton.form.dataset.adsSubmitting==='1'){event.preventDefault();return;}
+    refreshAdsButton.form.dataset.adsSubmitting='1';
+    setTimeout(()=>{refreshAdsButton.disabled=true;refreshAdsButton.textContent='Обновление выполняется…';},0);
+  });
+}
 hydrate();
 loadScenarioList();
 </script>
@@ -2760,6 +2772,21 @@ def _wb_token() -> str:
     return os.getenv("WB_API_TOKEN", "").strip()
 
 
+def _retry_after_seconds(value: str | None) -> float | None:
+    if not value:
+        return None
+    try:
+        return max(0.0, float(value.strip()))
+    except (TypeError, ValueError):
+        pass
+    try:
+        retry_at = parsedate_to_datetime(value)
+        now = datetime.now(retry_at.tzinfo) if retry_at.tzinfo else datetime.now()
+        return max(0.0, (retry_at - now).total_seconds())
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def _wb_request_json(method: str, url: str, *, params: dict[str, Any] | None = None, payload: Any = None, timeout: int = 80) -> Any:
     token = _wb_token()
     if not token:
@@ -2776,17 +2803,32 @@ def _wb_request_json(method: str, url: str, *, params: dict[str, Any] | None = N
     req = urllib.request.Request(final_url, data=body, headers=headers, method=method.upper())
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
+            logger.info(
+                "WB API response: http_status=%s method=%s endpoint=%s",
+                getattr(resp, "status", 200),
+                method.upper(),
+                url,
+            )
             raw = resp.read().decode("utf-8")
             if not raw:
                 return None
             return json.loads(raw)
     except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:700]
-        logger.exception("WB API вернул HTTP %s для %s %s: %s", exc.code, method.upper(), url, detail)
+        retry_after = exc.headers.get("Retry-After") if exc.headers else None
+        logger.warning(
+            "WB API response: http_status=%s method=%s endpoint=%s retry_after=%s",
+            exc.code,
+            method.upper(),
+            url,
+            retry_after or "absent",
+        )
         if exc.code in {401, 403}:
             raise RuntimeError("WB отклонил токен или у токена нет доступа к нужной категории API.") from exc
         if exc.code == 429:
-            raise RuntimeError("WB временно ограничил частоту запросов. Повторите синхронизацию позже.") from exc
+            raise WBRateLimitError(
+                retry_after=retry_after,
+                retry_after_seconds=_retry_after_seconds(retry_after),
+            ) from exc
         raise RuntimeError(f"WB API вернул ошибку {exc.code}.") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
         logger.exception("Не удалось выполнить %s-запрос к WB API %s", method.upper(), url)
@@ -2835,7 +2877,75 @@ def _load_sales_funnel(date_from: date, date_to: date, *, limit_pages: int = 5) 
 
 
 AD_CACHE_TTL = timedelta(hours=1)
-AD_CACHE_PARSER_VERSION = "46.1"
+AD_CACHE_PARSER_VERSION = "46.2"
+AD_SYNC_ALREADY_RUNNING = "Обновление рекламной статистики уже выполняется"
+_AD_SYNC_LOCAL_LOCKS: dict[tuple[date, date], threading.Lock] = {}
+_AD_SYNC_LOCAL_LOCKS_GUARD = threading.Lock()
+
+
+def _ad_cache_is_fresh(cached: dict[str, Any] | None) -> bool:
+    if not cached or cached.get("status") == "API_ERROR":
+        return False
+    if cached.get("parser_version") != AD_CACHE_PARSER_VERSION or not cached.get("fetched_at"):
+        return False
+    fetched_at = cached["fetched_at"]
+    now = datetime.now(fetched_at.tzinfo) if getattr(fetched_at, "tzinfo", None) else datetime.now()
+    return now - fetched_at < AD_CACHE_TTL
+
+
+def _ad_cache_can_fallback(cached: dict[str, Any] | None) -> bool:
+    return bool(
+        cached
+        and cached.get("status") == "OK"
+        and cached.get("fetched_at")
+        and cached.get("parser_version") in {"46.1", AD_CACHE_PARSER_VERSION}
+    )
+
+
+@contextmanager
+def _ad_sync_guard(date_from: date, date_to: date):
+    """Non-blocking local + PostgreSQL lock shared by all dashboard workers."""
+    key = (date_from, date_to)
+    with _AD_SYNC_LOCAL_LOCKS_GUARD:
+        local_lock = _AD_SYNC_LOCAL_LOCKS.setdefault(key, threading.Lock())
+    if not local_lock.acquire(blocking=False):
+        yield False
+        return
+
+    connection = None
+    database_lock_acquired = False
+    try:
+        if database_enabled() and os.getenv("DATABASE_URL", "").strip():
+            try:
+                connection = _scenario_connect()
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT pg_try_advisory_lock(%s, %s) AS acquired",
+                        (date_from.toordinal(), date_to.toordinal()),
+                    )
+                    row = cursor.fetchone()
+                    database_lock_acquired = bool(row.get("acquired") if isinstance(row, dict) else row[0])
+            except Exception:
+                logger.exception("Не удалось получить блокировку синхронизации рекламной статистики")
+                yield False
+                return
+            if not database_lock_acquired:
+                yield False
+                return
+        yield True
+    finally:
+        if connection is not None:
+            if database_lock_acquired:
+                try:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT pg_advisory_unlock(%s, %s)",
+                            (date_from.toordinal(), date_to.toordinal()),
+                        )
+                except Exception:
+                    logger.exception("Не удалось освободить блокировку синхронизации рекламной статистики")
+            connection.close()
+        local_lock.release()
 
 
 def _ensure_ad_cache_tables() -> None:
@@ -3015,24 +3125,75 @@ def _write_ad_stats_cache(date_from: date, date_to: date, result: dict[str, Any]
 
 def _load_ad_stats_detailed(date_from: date, date_to: date, *, force: bool = False) -> dict[str, Any]:
     cached = _read_ad_stats_cache(date_from, date_to)
-    now = datetime.now(cached["fetched_at"].tzinfo) if cached and cached.get("fetched_at") else datetime.now()
-    if (
-        cached
-        and not force
-        and cached.get("parser_version") == AD_CACHE_PARSER_VERSION
-        and now - cached["fetched_at"] <= AD_CACHE_TTL
-    ):
+    if _ad_cache_is_fresh(cached):
+        logger.info(
+            "WB advertising cache: http_status=not_requested cache_used=true cache_time=%s retry_after=none retry_attempt=0",
+            cached.get("fetched_at"),
+        )
         return cached
-    result = fetch_advertising_stats(_wb_request_json, date_from, date_to, pause_seconds=20.1)
-    if result.get("status") == "API_ERROR" and cached:
-        cached["warnings"] = [
-            f"Используются кэшированные данные от {_date_time_display(cached.get('fetched_at'))}: обновление WB завершилось ошибкой."
-        ] + list(result.get("warnings") or [])
-        cached["stale_cache"] = True
-        return cached
-    _write_ad_stats_cache(date_from, date_to, result)
-    result["from_cache"] = False
-    return result
+
+    with _ad_sync_guard(date_from, date_to) as acquired:
+        if not acquired:
+            logger.info(
+                "WB advertising sync: http_status=not_requested cache_used=%s cache_time=%s retry_after=none retry_attempt=0 already_running=true",
+                bool(cached),
+                cached.get("fetched_at") if cached else None,
+            )
+            if cached:
+                cached["warnings"] = [AD_SYNC_ALREADY_RUNNING] + list(cached.get("warnings") or [])
+                cached["stale_cache"] = True
+                return cached
+            return {
+                "by_nm": {},
+                "status": "API_ERROR",
+                "warnings": [AD_SYNC_ALREADY_RUNNING],
+                "fetched_at": datetime.now(),
+                "from_cache": False,
+                "sync_in_progress": True,
+            }
+
+        # Another worker may have completed between the first cache read and lock acquisition.
+        current_cached = _read_ad_stats_cache(date_from, date_to)
+        if _ad_cache_is_fresh(current_cached):
+            logger.info(
+                "WB advertising cache: http_status=not_requested cache_used=true cache_time=%s retry_after=none retry_attempt=0",
+                current_cached.get("fetched_at"),
+            )
+            return current_cached
+        fallback_cache = current_cached or cached
+
+        result = fetch_advertising_stats(_wb_request_json, date_from, date_to, pause_seconds=20.1)
+        if result.get("rate_limited"):
+            rate_limit_cache = fallback_cache if _ad_cache_can_fallback(fallback_cache) else None
+            if rate_limit_cache:
+                cache_time = _date_time_display(rate_limit_cache.get("fetched_at"))
+                rate_limit_cache["warnings"] = [
+                    f"WB временно ограничил запросы. Используются данные из кэша от {cache_time}"
+                ]
+                rate_limit_cache["stale_cache"] = True
+                rate_limit_cache["rate_limited"] = True
+                logger.warning(
+                    "WB advertising sync: http_status=429 cache_used=true cache_time=%s retry_after=%s retry_attempt=%s",
+                    rate_limit_cache.get("fetched_at"),
+                    result.get("retry_after") or "absent",
+                    result.get("retry_attempt") or 0,
+                )
+                return rate_limit_cache
+            result["warnings"] = ["WB временно ограничил получение рекламной статистики. Повторите позже"]
+            logger.warning(
+                "WB advertising sync: http_status=429 cache_used=false cache_time=none retry_after=%s retry_attempt=%s",
+                result.get("retry_after") or "absent",
+                result.get("retry_attempt") or 0,
+            )
+        elif result.get("status") == "API_ERROR" and fallback_cache:
+            fallback_cache["warnings"] = [
+                f"Используются кэшированные данные от {_date_time_display(fallback_cache.get('fetched_at'))}: обновление WB завершилось ошибкой."
+            ] + list(result.get("warnings") or [])
+            fallback_cache["stale_cache"] = True
+            return fallback_cache
+        _write_ad_stats_cache(date_from, date_to, result)
+        result["from_cache"] = False
+        return result
 
 
 def _load_ad_stats(date_from: date, date_to: date) -> tuple[dict[int, dict[str, Any]], list[str], str]:
@@ -4182,10 +4343,6 @@ def _attach_ad_stats_to_matrix_rows(
             row.json = json.dumps(data, ensure_ascii=False).replace("'", "&#39;")
         except Exception:
             logger.exception("Не удалось добавить рекламные данные в строку SKU %s", getattr(row, "sku", ""))
-    if not ad_result.get("from_cache"):
-        _write_ad_stats_cache(date_from, date_to, ad_result)
-
-
 def _ensure_unit_matrix_scenario_table() -> None:
     with _scenario_connect() as connection:
         with connection.cursor() as cursor:
