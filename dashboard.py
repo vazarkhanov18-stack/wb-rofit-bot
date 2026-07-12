@@ -734,18 +734,24 @@ def health():
     return {"status": "ok", "database": database_enabled(), "management": management_store_ready()}
 
 
-def _money(value: float) -> str:
+def _money(value: float | None) -> str:
+    if value is None:
+        return "Нет данных"
     number = float(value)
     sign = "−" if number < 0 else ""
     text = f"{abs(number):,.2f} ₽".replace(",", " ").replace(".00 ₽", " ₽")
     return sign + text
 
 
-def _percent(value: float) -> str:
+def _percent(value: float | None) -> str:
+    if value is None:
+        return "Нет данных"
     return f"{float(value) * 100:.1f}%".replace(".", ",")
 
 
-def _units(value: float) -> str:
+def _units(value: float | None) -> str:
+    if value is None:
+        return "Нет данных"
     number = float(value)
     return str(int(number)) if number.is_integer() else f"{number:.1f}".replace(".", ",")
 
@@ -2829,6 +2835,7 @@ def _load_sales_funnel(date_from: date, date_to: date, *, limit_pages: int = 5) 
 
 
 AD_CACHE_TTL = timedelta(hours=1)
+AD_CACHE_PARSER_VERSION = "46.1"
 
 
 def _ensure_ad_cache_tables() -> None:
@@ -2866,6 +2873,7 @@ def _ensure_ad_cache_tables() -> None:
                     date_from DATE NOT NULL,
                     date_to DATE NOT NULL,
                     status TEXT NOT NULL,
+                    parser_version TEXT NOT NULL DEFAULT '',
                     warnings_json JSONB NOT NULL DEFAULT '[]'::jsonb,
                     fetched_at TIMESTAMPTZ NOT NULL,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -2873,6 +2881,9 @@ def _ensure_ad_cache_tables() -> None:
                     UNIQUE (date_from, date_to)
                 )
                 """
+            )
+            cursor.execute(
+                "ALTER TABLE ad_stats_sync_runs ADD COLUMN IF NOT EXISTS parser_version TEXT NOT NULL DEFAULT ''"
             )
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_sku_ad_cache_period ON sku_ad_stats_cache(date_from, date_to)")
 
@@ -2885,7 +2896,7 @@ def _read_ad_stats_cache(date_from: date, date_to: date) -> dict[str, Any] | Non
         with _scenario_connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "SELECT status, warnings_json, fetched_at FROM ad_stats_sync_runs WHERE date_from = %s AND date_to = %s",
+                    "SELECT status, parser_version, warnings_json, fetched_at FROM ad_stats_sync_runs WHERE date_from = %s AND date_to = %s",
                     (date_from, date_to),
                 )
                 sync = cursor.fetchone()
@@ -2939,6 +2950,7 @@ def _read_ad_stats_cache(date_from: date, date_to: date) -> dict[str, Any] | Non
                 return {
                     "by_nm": by_nm,
                     "status": sync.get("status") or "OK",
+                    "parser_version": sync.get("parser_version") or "",
                     "warnings": warnings,
                     "fetched_at": sync.get("fetched_at"),
                     "from_cache": True,
@@ -2979,15 +2991,23 @@ def _write_ad_stats_cache(date_from: date, date_to: date, result: dict[str, Any]
                     )
                 cursor.execute(
                     """
-                    INSERT INTO ad_stats_sync_runs (date_from, date_to, status, warnings_json, fetched_at)
-                    VALUES (%s, %s, %s, %s::jsonb, %s)
+                    INSERT INTO ad_stats_sync_runs (date_from, date_to, status, parser_version, warnings_json, fetched_at)
+                    VALUES (%s, %s, %s, %s, %s::jsonb, %s)
                     ON CONFLICT (date_from, date_to) DO UPDATE SET
                         status = EXCLUDED.status,
+                        parser_version = EXCLUDED.parser_version,
                         warnings_json = EXCLUDED.warnings_json,
                         fetched_at = EXCLUDED.fetched_at,
                         updated_at = NOW()
                     """,
-                    (date_from, date_to, result.get("status") or "OK", json.dumps(result.get("warnings") or [], ensure_ascii=False), fetched_at),
+                    (
+                        date_from,
+                        date_to,
+                        result.get("status") or "OK",
+                        AD_CACHE_PARSER_VERSION,
+                        json.dumps(result.get("warnings") or [], ensure_ascii=False),
+                        fetched_at,
+                    ),
                 )
     except Exception:
         logger.exception("Не удалось сохранить кэш рекламной статистики")
@@ -2996,7 +3016,12 @@ def _write_ad_stats_cache(date_from: date, date_to: date, result: dict[str, Any]
 def _load_ad_stats_detailed(date_from: date, date_to: date, *, force: bool = False) -> dict[str, Any]:
     cached = _read_ad_stats_cache(date_from, date_to)
     now = datetime.now(cached["fetched_at"].tzinfo) if cached and cached.get("fetched_at") else datetime.now()
-    if cached and not force and now - cached["fetched_at"] <= AD_CACHE_TTL:
+    if (
+        cached
+        and not force
+        and cached.get("parser_version") == AD_CACHE_PARSER_VERSION
+        and now - cached["fetched_at"] <= AD_CACHE_TTL
+    ):
         return cached
     result = fetch_advertising_stats(_wb_request_json, date_from, date_to, pause_seconds=20.1)
     if result.get("status") == "API_ERROR" and cached:
@@ -3010,7 +3035,7 @@ def _load_ad_stats_detailed(date_from: date, date_to: date, *, force: bool = Fal
     return result
 
 
-def _load_ad_stats(date_from: date, date_to: date) -> tuple[dict[int, dict[str, Any]], list[str]]:
+def _load_ad_stats(date_from: date, date_to: date) -> tuple[dict[int, dict[str, Any]], list[str], str]:
     """Compatibility wrapper used by the existing Funnel/Ads route."""
     result = _load_ad_stats_detailed(date_from, date_to)
     legacy: dict[int, dict[str, Any]] = {}
@@ -3021,10 +3046,17 @@ def _load_ad_stats(date_from: date, date_to: date) -> tuple[dict[int, dict[str, 
             "sum": float(row.get("spend") or 0),
             "sum_price": float(row.get("revenue") or 0),
         }
-    return legacy, list(result.get("warnings") or [])
+    return legacy, list(result.get("warnings") or []), str(result.get("status") or "API_ERROR")
 
 
-def _funnel_product_row(item: dict[str, Any], ad_row: dict[str, Any] | None, actual_by_nm: dict[int, dict[str, float]], *, drop_threshold: float) -> SimpleNamespace:
+def _funnel_product_row(
+    item: dict[str, Any],
+    ad_row: dict[str, Any] | None,
+    actual_by_nm: dict[int, dict[str, float]],
+    *,
+    drop_threshold: float,
+    advertising_data_status: str = "OK",
+) -> SimpleNamespace:
     product = item.get("product") or {}
     stat = item.get("statistic") or {}
     selected = stat.get("selected") or {}
@@ -3033,13 +3065,15 @@ def _funnel_product_row(item: dict[str, Any], ad_row: dict[str, Any] | None, act
     nm_id = int(product.get("nmId") or 0)
     actual = actual_by_nm.get(nm_id, {})
     ad = ad_row or {}
+    ad_metrics_available = bool(ad_row) or advertising_data_status == "OK"
     open_count = float(selected.get("openCount") or 0)
     cart_count = float(selected.get("cartCount") or 0)
     order_count = float(selected.get("orderCount") or 0)
     buyout_count = float(selected.get("buyoutCount") or 0)
-    ad_views = float(ad.get("views") or 0)
-    ad_clicks = float(ad.get("clicks") or 0)
-    ad_sum = float(ad.get("sum") or 0)
+    ad_views = float(ad.get("views") or 0) if ad_metrics_available else None
+    ad_clicks = float(ad.get("clicks") or 0) if ad_metrics_available else None
+    ad_sum = float(ad.get("sum") or 0) if ad_metrics_available else None
+    ad_revenue = float(ad.get("sum_price") or 0) if ad_metrics_available else None
     open_dyn = float(comparison.get("openCountDynamic") or 0) / 100.0
     cart_dyn = float(comparison.get("cartCountDynamic") or 0) / 100.0
     order_dyn = float(comparison.get("orderCountDynamic") or 0) / 100.0
@@ -3048,13 +3082,17 @@ def _funnel_product_row(item: dict[str, Any], ad_row: dict[str, Any] | None, act
     raw_buyout = float(conv.get("buyoutPercent") or selected.get("buyoutPercent") or 0)
     status = "Норма"
     status_level = "good"
-    if open_dyn <= -drop_threshold:
+    if advertising_data_status == "API_ERROR":
+        status, status_level = "Ошибка рекламного API", "bad"
+    elif advertising_data_status == "PARTIAL_DATA":
+        status, status_level = "Рекламные данные неполные", "warn"
+    elif open_dyn <= -drop_threshold:
         status, status_level = "Просадка переходов", "bad"
     elif cart_dyn <= -drop_threshold:
         status, status_level = "Просадка корзин", "bad"
     elif order_dyn <= -drop_threshold:
         status, status_level = "Просадка заказов", "bad"
-    elif ad_clicks > 0 and float(ad.get("orders") or 0) == 0:
+    elif float(ad_clicks or 0) > 0 and float(ad.get("orders") or 0) == 0:
         status, status_level = "Реклама без заказов", "warn"
     return SimpleNamespace(
         nm_id=nm_id,
@@ -3072,14 +3110,16 @@ def _funnel_product_row(item: dict[str, Any], ad_row: dict[str, Any] | None, act
         buyout_rate=raw_buyout / 100.0 if raw_buyout > 1 else raw_buyout,
         ad_views=ad_views,
         ad_clicks=ad_clicks,
-        ad_ctr=_div(ad_clicks, ad_views),
-        ad_cpc=_div(ad_sum, ad_clicks),
-        ad_atbs=float(ad.get("atbs") or 0),
-        ad_orders=float(ad.get("orders") or 0),
+        ad_ctr=_div(ad_clicks, ad_views) if ad_metrics_available else None,
+        ad_cpc=_div(ad_sum, ad_clicks) if ad_metrics_available else None,
+        ad_atbs=float(ad.get("atbs") or 0) if ad_metrics_available else None,
+        ad_orders=float(ad.get("orders") or 0) if ad_metrics_available else None,
         ad_sum=ad_sum,
         fact_revenue=float(actual.get("revenue") or 0),
         fact_profit=float(actual.get("profit") or 0),
-        fact_drr=_div(ad_sum, float(ad.get("sum_price") or 0)),
+        fact_drr=_div(ad_sum, ad_revenue) if advertising_data_status == "OK" and ad_revenue else None,
+        advertising_data_status=advertising_data_status,
+        ad_metrics_available=ad_metrics_available,
         status=status,
         status_level=status_level,
     )
@@ -3243,7 +3283,7 @@ def funnel_ads():
     except Exception as exc:
         funnel_items = []
         warnings.append(f"Не удалось получить воронку WB: {exc}")
-    ad_by_nm, ad_warnings = _load_ad_stats(date_from, date_to)
+    ad_by_nm, ad_warnings, advertising_data_status = _load_ad_stats(date_from, date_to)
     warnings.extend(ad_warnings)
 
     actual_rows, _, _ = _actual_sales_rows(
@@ -3272,7 +3312,13 @@ def funnel_ads():
     for item in funnel_items:
         product = item.get("product") or {}
         nm_id = int(product.get("nmId") or 0)
-        row = _funnel_product_row(item, ad_by_nm.get(nm_id), actual_by_nm, drop_threshold=drop_threshold)
+        row = _funnel_product_row(
+            item,
+            ad_by_nm.get(nm_id),
+            actual_by_nm,
+            drop_threshold=drop_threshold,
+            advertising_data_status=advertising_data_status,
+        )
         used_nms.add(nm_id)
         if query and query not in row.name.lower() and query not in row.sku.lower() and query not in str(row.nm_id):
             continue
@@ -3281,25 +3327,32 @@ def funnel_ads():
         if nm_id in used_nms:
             continue
         dummy = {"product": {"nmId": nm_id, "title": ad.get("name") or f"nmID {nm_id}", "vendorCode": "—"}, "statistic": {"selected": {}, "comparison": {}}}
-        row = _funnel_product_row(dummy, ad, actual_by_nm, drop_threshold=drop_threshold)
+        row = _funnel_product_row(
+            dummy,
+            ad,
+            actual_by_nm,
+            drop_threshold=drop_threshold,
+            advertising_data_status=advertising_data_status,
+        )
         if query and query not in row.name.lower() and query not in row.sku.lower() and query not in str(row.nm_id):
             continue
         rows.append(row)
-    rows.sort(key=lambda r: (0 if r.status_level == "bad" else 1 if r.status_level == "warn" else 2, -abs(r.open_dyn), -r.ad_sum, -r.open_count))
+    rows.sort(key=lambda r: (0 if r.status_level == "bad" else 1 if r.status_level == "warn" else 2, -abs(r.open_dyn), -float(r.ad_sum or 0), -r.open_count))
 
+    aggregate_ad_metrics_available = bool(ad_by_nm) or advertising_data_status == "OK"
     totals = SimpleNamespace(
         products=len(rows),
         open_count=sum(r.open_count for r in rows),
         cart_count=sum(r.cart_count for r in rows),
         order_count=sum(r.order_count for r in rows),
         buyout_count=sum(r.buyout_count for r in rows),
-        ad_views=sum(r.ad_views for r in rows),
-        ad_clicks=sum(r.ad_clicks for r in rows),
-        ad_sum=sum(r.ad_sum for r in rows),
+        ad_views=sum(float(r.ad_views or 0) for r in rows) if aggregate_ad_metrics_available else None,
+        ad_clicks=sum(float(r.ad_clicks or 0) for r in rows) if aggregate_ad_metrics_available else None,
+        ad_sum=sum(float(r.ad_sum or 0) for r in rows) if aggregate_ad_metrics_available else None,
     )
     totals.cart_cr = _div(totals.cart_count, totals.open_count)
     totals.buyout_rate = _div(totals.buyout_count, totals.order_count)
-    totals.ad_ctr = _div(totals.ad_clicks, totals.ad_views)
+    totals.ad_ctr = _div(totals.ad_clicks, totals.ad_views) if aggregate_ad_metrics_available else None
     insights = []
     for r in rows:
         if r.open_dyn <= -drop_threshold:
@@ -3308,7 +3361,7 @@ def funnel_ads():
             insights.append(SimpleNamespace(level="bad", title="Упали корзины", name=r.name, sku=r.sku, reason=f"Корзины изменились на {_percent(r.cart_dyn)}. Проверь цену, первый экран, инфографику, отзывы и оффер."))
         elif r.order_dyn <= -drop_threshold:
             insights.append(SimpleNamespace(level="bad", title="Упали заказы", name=r.name, sku=r.sku, reason=f"Заказы изменились на {_percent(r.order_dyn)}. Проверь срок доставки, цену, рейтинг, остатки и конкурентов."))
-        elif r.ad_clicks > 0 and r.ad_orders == 0:
+        elif float(r.ad_clicks or 0) > 0 and float(r.ad_orders or 0) == 0:
             insights.append(SimpleNamespace(level="warn", title="Клики без заказов", name=r.name, sku=r.sku, reason=f"Реклама дала {int(r.ad_clicks)} кликов и 0 заказов. Проверь релевантность запросов, карточку и цену."))
         if len(insights) >= 15:
             break
@@ -3324,6 +3377,7 @@ def funnel_ads():
         totals=totals,
         insights=insights,
         warnings=warnings,
+        advertising_data_status=advertising_data_status,
         money=_money,
         percent=_percent,
         units=_units,

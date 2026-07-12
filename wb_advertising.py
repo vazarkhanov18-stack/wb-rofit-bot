@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, Iterable
@@ -9,6 +10,8 @@ ELIGIBLE_CAMPAIGN_STATUSES = {7, 9, 11}
 ACTIVE_CAMPAIGN_STATUS = 9
 FULLSTATS_MAX_DAYS = 31
 FULLSTATS_MAX_CAMPAIGNS = 50
+
+logger = logging.getLogger("wb-profit-dashboard.advertising")
 
 
 def split_date_range(date_from: date, date_to: date, max_days: int = FULLSTATS_MAX_DAYS) -> list[tuple[date, date]]:
@@ -82,6 +85,59 @@ def merge_campaign_details(catalog: dict[int, dict[str, Any]], payload: Any) -> 
         )
 
 
+def normalize_fullstats_payload(payload: Any) -> tuple[list[dict[str, Any]], list[str]]:
+    """Return campaign rows from the official array or a supported wrapper object."""
+    warnings: list[str] = []
+    source = "official_list"
+    if isinstance(payload, list):
+        raw_items = payload
+    elif isinstance(payload, dict):
+        source = "unknown_object"
+        raw_items = None
+        for key in ("data", "result", "items"):
+            candidate = payload.get(key)
+            if isinstance(candidate, list):
+                source = key
+                raw_items = candidate
+                break
+        if raw_items is None:
+            raw_items = []
+            warnings.append(
+                "WB вернул рекламную статистику в неизвестном формате: массив кампаний не найден."
+            )
+    else:
+        raw_items = []
+        warnings.append(
+            "WB вернул рекламную статистику в неизвестном формате: ожидался JSON-массив кампаний."
+        )
+
+    items = [item for item in raw_items if isinstance(item, dict)]
+    if len(items) != len(raw_items):
+        warnings.append("Часть элементов рекламной статистики WB не является объектами кампаний.")
+    _log_fullstats_shape(payload, items, source, len(raw_items))
+    return items, warnings
+
+
+def _log_fullstats_shape(payload: Any, items: list[dict[str, Any]], source: str, items_count: int) -> None:
+    first = items[0] if items else (payload if isinstance(payload, dict) else {})
+    first_keys = sorted(str(key) for key in first.keys()) if isinstance(first, dict) else []
+    days = first.get("days") if isinstance(first, dict) else None
+    first_day = days[0] if isinstance(days, list) and days and isinstance(days[0], dict) else None
+    apps = first_day.get("apps") if isinstance(first_day, dict) else None
+    first_app = apps[0] if isinstance(apps, list) and apps and isinstance(apps[0], dict) else None
+    nms = first_app.get("nms") if isinstance(first_app, dict) else None
+    logger.info(
+        "WB fullstats shape: top_type=%s source=%s items_count=%s first_keys=%s days_type=%s apps_type=%s nms_type=%s",
+        type(payload).__name__,
+        source,
+        items_count,
+        first_keys,
+        type(days).__name__,
+        type(apps).__name__,
+        type(nms).__name__,
+    )
+
+
 def aggregate_fullstats(
     payload: Any,
     catalog: dict[int, dict[str, Any]],
@@ -89,22 +145,21 @@ def aggregate_fullstats(
     *,
     requested_from: date,
     requested_to: date,
-    seen: set[tuple[int, str, str, int]] | None = None,
+    seen: set[tuple[int, str, int, int, int, int]] | None = None,
 ) -> list[str]:
     """Merge /adv/v3/fullstats at its most precise nmID level."""
-    warnings: list[str] = []
-    if not isinstance(payload, list):
-        return ["WB вернул рекламную статистику в неожиданном формате."]
+    campaigns, warnings = normalize_fullstats_payload(payload)
     seen = seen if seen is not None else set()
-    for campaign in payload:
-        if not isinstance(campaign, dict):
-            continue
+    for campaign in campaigns:
         campaign_id = _as_int(campaign.get("advertId"))
         meta = catalog.get(campaign_id, {"campaign_id": campaign_id, "name": "", "type": None, "status": None})
-        campaign_has_nm = False
-        campaign_has_value = any(_as_float(campaign.get(key)) for key in ("sum", "sum_price", "orders", "views", "clicks"))
-        for day_row in campaign.get("days", []) or []:
+        days = campaign.get("days")
+        if not isinstance(days, list) or not days:
+            warnings.append(f"Кампания {campaign_id}: отсутствует детализация days.")
+            continue
+        for day_index, day_row in enumerate(days):
             if not isinstance(day_row, dict):
+                warnings.append(f"Кампания {campaign_id}: элемент days имеет неизвестный формат.")
                 continue
             stat_date = str(day_row.get("date") or "")[:10]
             try:
@@ -113,20 +168,29 @@ def aggregate_fullstats(
                 parsed_date = None
             if parsed_date and not (requested_from <= parsed_date <= requested_to):
                 continue
-            apps = day_row.get("apps") or []
-            for app in apps:
+            apps = day_row.get("apps")
+            if not isinstance(apps, list) or not apps:
+                warnings.append(f"Кампания {campaign_id}, дата {stat_date or 'не указана'}: отсутствует детализация apps.")
+                continue
+            for app_index, app in enumerate(apps):
                 if not isinstance(app, dict):
+                    warnings.append(f"Кампания {campaign_id}: элемент apps имеет неизвестный формат.")
                     continue
-                app_type = str(app.get("appType") or "")
-                nm_rows = app.get("nms") if isinstance(app.get("nms"), list) else app.get("nm")
-                for nm_row in nm_rows or []:
+                nm_rows = app.get("nms")
+                if not isinstance(nm_rows, list) or not nm_rows:
+                    warnings.append(
+                        f"Кампания {campaign_id}, дата {stat_date or 'не указана'}: отсутствует разбивка nms по nmID."
+                    )
+                    continue
+                for nm_index, nm_row in enumerate(nm_rows):
                     if not isinstance(nm_row, dict):
+                        warnings.append(f"Кампания {campaign_id}: элемент nms имеет неизвестный формат.")
                         continue
-                    nm_id = _as_int(nm_row.get("nmId") or nm_row.get("nm"))
+                    nm_id = _as_int(nm_row.get("nmId"))
                     if nm_id <= 0:
+                        warnings.append(f"Кампания {campaign_id}: в nms отсутствует корректный nmId.")
                         continue
-                    campaign_has_nm = True
-                    dedupe_key = (campaign_id, stat_date, app_type, nm_id)
+                    dedupe_key = (campaign_id, stat_date, day_index, app_index, nm_index, nm_id)
                     if dedupe_key in seen:
                         continue
                     seen.add(dedupe_key)
@@ -154,10 +218,6 @@ def aggregate_fullstats(
                         campaign_row[key] += value
                     if stat_date:
                         campaign_row["dates"].add(stat_date)
-        if campaign_has_value and not campaign_has_nm:
-            warnings.append(
-                f"Кампания {campaign_id} содержит общие показатели без разбивки по nmID; они не распределены между SKU."
-            )
     return warnings
 
 
@@ -220,7 +280,7 @@ def fetch_advertising_stats(
 
     requests = [(period, batch) for period in split_date_range(date_from, date_to) for batch in chunked(ids)]
     by_nm: dict[int, dict[str, Any]] = {}
-    seen: set[tuple[int, str, str, int]] = set()
+    seen: set[tuple[int, str, int, int, int, int]] = set()
     successful = 0
     failed = 0
     incomplete = False

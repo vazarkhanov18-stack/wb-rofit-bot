@@ -9,6 +9,7 @@ from wb_advertising import (
     extract_campaign_catalog,
     fetch_advertising_stats,
     finalize_by_nm,
+    normalize_fullstats_payload,
     split_date_range,
 )
 from wb_unit_math import manual_warehouse_costs
@@ -78,6 +79,84 @@ class AdvertisingAggregationTests(unittest.TestCase):
         self.assertEqual(by_nm[123]["revenue"], 5000)
         self.assertEqual(by_nm[123]["factual_drr"], 20)
 
+    def test_two_apps_for_same_nm_are_summed_without_campaign_totals(self):
+        payload = [
+            {
+                "advertId": 1,
+                "sum": 9999,
+                "sum_price": 99999,
+                "orders": 999,
+                "views": 99999,
+                "clicks": 9999,
+                "days": [
+                    {
+                        "date": "2026-05-01",
+                        "apps": [
+                            {
+                                "appType": 1,
+                                "nms": [
+                                    {"nmId": 123, "sum": 400, "sum_price": 2000, "orders": 2, "views": 400, "clicks": 20}
+                                ],
+                            },
+                            {
+                                "appType": 1,
+                                "nms": [
+                                    {"nmId": 123, "sum": 600, "sum_price": 3000, "orders": 3, "views": 600, "clicks": 30}
+                                ],
+                            },
+                        ],
+                    }
+                ],
+            }
+        ]
+        by_nm = {}
+        warnings = aggregate_fullstats(
+            payload,
+            {1: {"campaign_id": 1, "status": 9}},
+            by_nm,
+            requested_from=date(2026, 5, 1),
+            requested_to=date(2026, 5, 31),
+        )
+        finalize_by_nm(by_nm)
+        self.assertEqual(warnings, [])
+        self.assertEqual(by_nm[123]["spend"], 1000)
+        self.assertEqual(by_nm[123]["revenue"], 5000)
+        self.assertEqual(by_nm[123]["orders"], 5)
+        self.assertEqual(by_nm[123]["impressions"], 1000)
+        self.assertEqual(by_nm[123]["clicks"], 50)
+        self.assertEqual(by_nm[123]["factual_drr"], 20)
+
+    def test_empty_official_array_means_no_campaigns(self):
+        by_nm = {}
+        warnings = aggregate_fullstats(
+            [],
+            {},
+            by_nm,
+            requested_from=date(2026, 5, 1),
+            requested_to=date(2026, 5, 31),
+        )
+        self.assertEqual(warnings, [])
+        self.assertEqual(by_nm, {})
+
+    def test_supported_object_wrapper_is_accepted(self):
+        items, warnings = normalize_fullstats_payload({"data": [_campaign(1, 123, 1000, 5000, 5)]})
+        self.assertEqual(warnings, [])
+        self.assertEqual(len(items), 1)
+
+    def test_shape_logging_contains_only_types_counts_and_keys(self):
+        payload = [_campaign(1, 123, 1000, 5000, 5)]
+        with self.assertLogs("wb-profit-dashboard.advertising", level="INFO") as captured:
+            normalize_fullstats_payload(payload)
+        message = " ".join(captured.output)
+        self.assertIn("top_type=list", message)
+        self.assertIn("items_count=1", message)
+        self.assertIn("days_type=list", message)
+        self.assertIn("apps_type=list", message)
+        self.assertIn("nms_type=list", message)
+        self.assertNotIn("1000", message)
+        self.assertNotIn("5000", message)
+        self.assertNotIn("Authorization", message)
+
     def test_two_campaigns_use_ratio_of_totals(self):
         catalog = {
             1: {"campaign_id": 1, "name": "Кампания 1", "type": 9, "status": 7},
@@ -132,7 +211,28 @@ class AdvertisingAggregationTests(unittest.TestCase):
             requested_to=date(2026, 5, 31),
         )
         self.assertEqual(by_nm, {})
-        self.assertTrue(any("без разбивки по nmID" in warning for warning in warnings))
+        self.assertTrue(any("отсутствует детализация days" in warning for warning in warnings))
+
+    def test_unknown_object_is_partial_and_has_no_trustworthy_drr(self):
+        def request_json(method, url, **kwargs):
+            if url.endswith("promotion/count"):
+                return {"adverts": [{"type": 9, "status": 9, "advert_list": [{"advertId": 1}]}]}
+            if url.endswith("/api/advert/v2/adverts"):
+                return {"adverts": []}
+            return {"unexpected": []}
+
+        result = fetch_advertising_stats(
+            request_json,
+            date(2026, 5, 1),
+            date(2026, 5, 31),
+            pause_seconds=0,
+        )
+        classified = classify_sku_advertising(None, fetch_status=result["status"])
+        self.assertEqual(result["status"], "PARTIAL_DATA")
+        self.assertEqual(result["by_nm"], {})
+        self.assertTrue(any("неизвестном формате" in warning for warning in result["warnings"]))
+        self.assertEqual(classified["status"], "PARTIAL_DATA")
+        self.assertIsNone(classified["factual_drr"])
 
     def test_fetch_batches_both_campaigns_and_period(self):
         fullstats_calls = []
