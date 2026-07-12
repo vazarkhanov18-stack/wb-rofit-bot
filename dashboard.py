@@ -39,6 +39,8 @@ from wb_api import (
     get_seller_warehouses,
     get_wb_warehouse_stocks,
 )
+from wb_advertising import classify_sku_advertising, fetch_advertising_stats
+from wb_unit_math import manual_warehouse_costs
 from wb_management import (
     delete_cost_profile,
     delete_expense,
@@ -112,19 +114,21 @@ PRODUCTS_TEMPLATE = r"""
 
 
 UNIT_MATRIX_TEMPLATE = r"""
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>SKU-юнитка · WB Profit</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
-<header><div><h1>Интерактивная юнит-экономика по SKU</h1><div class="subtitle">Excel-like таблица: факт WB отдельно от сценария, цена с СПП, схема FBS/FBW, ручные FBS-склады, тарифы, фото и ссылки WB прямо в строке</div></div><div class="badge">Факт + сценарии · v40</div></header>
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>SKU-юнитка · WB Profit</title>""" + BASE_STYLE + r"""<style>.ad-orange{color:#c05a12}.ad-gray{color:#7b8794}.ad-detail{min-width:900px;padding:10px 0}.ad-detail table{min-width:880px}.ad-status{font-weight:800}.ad-sync{display:flex;gap:18px;flex-wrap:wrap;align-items:center}</style></head><body><div class="wrap">
+<header><div><h1>Интерактивная юнит-экономика по SKU</h1><div class="subtitle">Факт WB отдельно от сценария, точный ДРР по всем кампаниям SKU и диагностика источников</div></div><div class="badge">Факт + сценарии · v46</div></header>
 <nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a class="active" href="/unit-matrix">SKU-юнитка</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
-<form class="filters" method="get"><label>Период<select name="period_type"><option value="actual" {% if selected_type == 'actual' %}selected{% endif %}>Актуально без дублей</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select></label><label>С даты<input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату<input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск<input name="q" value="{{ query }}" placeholder="товар / артикул / nmID"></label><label>Целевая маржа, %<input id="targetMarginInput" name="target_margin" inputmode="decimal" value="{{ target_margin_input }}"></label><button type="submit">Показать</button></form>
+<form class="filters" method="get"><label>Период<select name="period_type"><option value="actual" {% if selected_type == 'actual' %}selected{% endif %}>Актуально без дублей</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Excel</option></select></label><label>С даты<input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату<input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Поиск<input name="q" value="{{ query }}" placeholder="товар / артикул / nmID"></label><label>Целевая маржа, %<input id="targetMarginInput" name="target_margin" inputmode="decimal" value="{{ target_margin_input }}"></label><button type="submit">Показать</button><button type="submit" name="refresh_ads" value="1" class="secondary">Обновить рекламные данные</button></form>
 <div class="hint">Фактический режим показывает базовую юнит-экономику из сохранённых отчётов. Изменения в таблице — это <b>сценарий</b>: они не затирают данные WB и не меняют себестоимость в базе, пока ты отдельно не сохранишь её в разделе «Себестоимость и расходы».</div>
 {% if tariff_warning %}<div class="notice error">{{ tariff_warning }}</div>{% endif %}
+<div class="card ad-sync"><span><b>Реклама:</b> {{ ad_period }}</span><span><b>Последняя синхронизация:</b> {{ ad_sync_at }}</span>{% if ad_from_cache %}<span class="muted">данные из PostgreSQL-кэша</span>{% endif %}<span><b>Автотарифы:</b> WB API на {{ tariff_date }}</span></div>
+{% for warning in ad_warnings %}<div class="notice {{ 'error' if 'ошиб' in warning|lower or 'недоступ' in warning|lower else '' }}">{{ warning }}</div>{% endfor %}
 <div class="section card"><div class="section-head"><div><h2>Управление сценарием</h2><div class="subtitle">Меняй ячейки — прибыль, маржа, ROI и минимальная цена пересчитаются сразу без перезагрузки</div></div><span id="scenarioStatus" class="matrix-mode-badge">Фактическая база</span></div>
 <div class="matrix-toolbar"><div class="field"><label>Фильтр категории</label><select id="filterCategory"><option value="">Все</option>{% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select></div><div class="field"><label>Фильтр бренда</label><select id="filterBrand"><option value="">Все</option>{% for b in brands %}<option value="{{ b }}">{{ b }}</option>{% endfor %}</select></div><div class="field"><label>Фильтр склада</label><select id="filterWarehouse"><option value="">Все</option>{% for wh in warehouse_options %}<option value="{{ wh }}">{{ wh }}</option>{% endfor %}</select></div><div class="field"><label>Статус</label><select id="filterStatus"><option value="">Все</option><option value="good">Прибыльный</option><option value="warn">На грани</option><option value="bad">Убыточный</option></select></div><div class="field"><label>Мин. маржа, %</label><input id="filterMargin" inputmode="decimal" placeholder="например 10"></div></div>
 <div class="matrix-toolbar" style="margin-top:10px"><div class="field"><label>Название сценария</label><input id="scenarioName" placeholder="Например: Краснодар · ДРР 15%"></div><button type="button" class="secondary" id="saveScenarioBtn">Сохранить сценарий</button><div class="field"><label>Загрузить сценарий</label><select id="scenarioSelect" class="scenario-select"><option value="">— сохранённые сценарии —</option></select></div><button type="button" class="secondary" id="loadScenarioBtn">Загрузить</button><button type="button" class="danger" id="deleteScenarioBtn">Удалить</button><div class="field"><label>Сравнить с другим</label><select id="compareScenarioSelect" class="scenario-select"><option value="">— выбрать сценарий —</option></select></div><button type="button" id="compareScenarioBtn">Сравнить сценарии</button><button type="button" class="secondary" id="resetScenarioBtn">Сбросить изменения</button><button type="button" class="secondary" id="restoreWbBtn">Вернуть данные из WB</button><button type="button" class="secondary" id="applyCalcScenariosBtn">Подтянуть из калькулятора</button><button type="button" class="secondary" id="fillMissingCalcScenariosBtn">Заполнить пустые из калькулятора</button><button type="button" id="compareBtn">Сравнить с базой</button></div><div id="scenarioCompare" class="compare-panel" style="display:none"></div><div class="hint" style="margin-top:10px"><b>Связка с калькулятором:</b> кнопка «Подтянуть из калькулятора» берёт сохранённые сценарии из раздела «Калькулятор юнитки» и заполняет строки SKU по совпадению артикула/nmID/названия. Это сценарный расчёт, фактические данные WB не затираются.</div></div>
 <div class="grid section"><div class="card"><div class="label">SKU в таблице</div><div class="value" id="visibleCount">{{ rows|length }}</div></div><div class="card"><div class="label">Сценарная прибыль</div><div class="value good" id="totalProfit">0 ₽</div></div><div class="card"><div class="label">Влияние на прибыль</div><div class="value" id="totalImpact">0 ₽</div></div><div class="card"><div class="label">Средняя маржа</div><div class="value" id="avgMargin">0%</div></div><div class="card"><div class="label">Убыточных / на грани</div><div class="value" id="badCount">0 / 0</div></div></div>
-<div class="section card"><div class="section-head"><div><h2>Таблица SKU</h2><div class="subtitle">Первая колонка закреплена. Цена считается как в калькуляторе юнитки: вводишь цену для покупателя с СПП и СПП %, система считает цену до СПП. Склад выбирается прямо в строке; для FBS можно выбрать ручной СЦ, например СЦ Владикавказ.</div></div><span class="muted">{{ period_label }}</span></div><div class="sku-matrix-wrap"><table class="sku-matrix" id="unitMatrix"><thead><tr><th class="sticky-product">Товар</th><th>Артикул WB / SKU</th><th>SKU / размер / цвет</th><th>Категория</th><th>Схема</th><th>Цена с СПП</th><th>СПП, %</th><th>Цена до СПП</th><th>Себестоимость</th><th>Комиссия WB, %</th><th>Комиссия WB, ₽</th><th>Склад</th><th>Длина, см</th><th>Ширина, см</th><th>Высота, см</th><th>Объём, л</th><th>1-й литр, ₽</th><th>Доп. литр, ₽</th><th>Логистика, ₽</th><th>Хранение, ₽</th><th>Реклама / ДРР</th><th>Налог, %</th><th>Прочие расходы</th><th>Прибыль до рекламы</th><th>Макс ДРР</th><th>Желаемая прибыль</th><th>Целевой ДРР</th><th>Факт ДРР</th><th>Запас ДРР</th><th>Ожид. прибыль</th><th>Рекомендация</th><th>Чистая прибыль, ₽</th><th>Маржа, %</th><th>ROI, %</th><th>Точка безуб.</th><th>Мин. цена</th><th>Цена для маржи</th><th>Влияние</th><th>Статус</th></tr></thead><tbody>
-{% for row in rows %}<tr data-row='{{ row.json|safe }}' data-category="{{ row.category }}" data-brand="{{ row.brand }}"><td class="sticky-product"><div class="sku-product-cell"><a href="{{ row.product_url }}" target="_blank" rel="noopener"><img class="sku-img" src="{{ row.photo_url }}" onerror="this.style.display='none'"></a><div><div class="sku-name">{% if row.product_url %}<a class="text-link" href="{{ row.product_url }}" target="_blank" rel="noopener">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</div><div class="sku-meta">nmID {{ row.nm_id or '—' }} · факт: {{ units(row.units) }} шт.{% if row.product_url %} · <a class="text-link" href="{{ row.product_url }}" target="_blank" rel="noopener">открыть WB</a>{% endif %}</div></div></div></td><td>{{ row.sku }}</td><td class="muted">{{ row.variant }}</td><td>{{ row.category }}</td><td><select class="js-field scheme-input" data-key="scheme"><option value="fbs">FBS</option><option value="fbw">FBW</option></select></td><td><input class="js-field" data-key="priceSpp" inputmode="decimal"></td><td><input class="js-field" data-key="sppPct" inputmode="decimal"></td><td class="js-priceBeforeSpp">0 ₽</td><td><input class="js-field" data-key="cost" inputmode="decimal"></td><td><input class="js-field" data-key="commissionPct" inputmode="decimal"></td><td class="js-commissionRub">0 ₽</td><td><select class="js-field warehouse-input" data-key="warehouse"><option value="">—</option>{% for wh in warehouse_options %}<option value="{{ wh }}">{{ wh }}</option>{% endfor %}<option value="__fbs_vladikavkaz__">СЦ Владикавказ · ручной FBS</option><option value="__fbs_manual__">Мой FBS-склад вручную</option></select></td><td><input class="js-field dimension-input" data-key="lengthCm" inputmode="decimal"></td><td><input class="js-field dimension-input" data-key="widthCm" inputmode="decimal"></td><td><input class="js-field dimension-input" data-key="heightCm" inputmode="decimal"></td><td class="js-volume volume-cell">0</td><td><input class="js-field logistics-rate-input" data-key="logisticsBase" inputmode="decimal"></td><td><input class="js-field logistics-rate-input" data-key="logisticsLiter" inputmode="decimal"></td><td><input class="js-field" data-key="logistics" inputmode="decimal"></td><td><input class="js-field" data-key="storage" inputmode="decimal"></td><td><input class="js-field" data-key="drr" inputmode="decimal"></td><td><input class="js-field" data-key="taxPct" inputmode="decimal"></td><td><input class="js-field" data-key="other" inputmode="decimal"></td><td class="js-profitBeforeAds">0 ₽</td><td class="js-maxDrr">0%</td><td><input class="js-field" data-key="desiredProfit" inputmode="decimal"></td><td class="js-targetDrr">0%</td><td class="js-factDrr">0%</td><td class="js-drrReserve">0%</td><td class="js-expectedProfit">0 ₽</td><td class="js-adRecommendation muted">—</td><td class="js-profit">0 ₽</td><td class="js-margin">0%</td><td class="js-roi">0%</td><td class="js-breakEven">0 ₽</td><td class="js-minPrice">0 ₽</td><td class="js-targetPrice">0 ₽</td><td class="js-impact matrix-impact">0 ₽</td><td><span class="sku-status js-status">—</span></td></tr>{% else %}<tr><td colspan="39" class="empty">Нет товаров за выбранный период.</td></tr>{% endfor %}
-</tbody></table></div><div class="hint">Формула SKU-юнитки синхронизирована с калькулятором юнитки: цена до СПП = цена для покупателя / (1 − СПП%). Комиссия WB, ДРР и налог считаются от цены до СПП. В блоке «Анализ рекламы» по каждой строке считаются прибыль до рекламы, максимальный ДРР, целевой ДРР, фактический ДРР, запас по ДРР и рекомендация по рекламе. Прямая логистика считается отдельно, а процент выкупа влияет только на нагрузку обратной логистики/невыкупа, если SKU заполнен из сохранённого сценария калькулятора. Для FBS-СЦ, которых нет в тарифах WB, выбирай ручной склад и вводи тарифы в ячейках логистики/хранения. Габариты считаются как Д×Ш×В/1000; логистика и хранение по тарифу WB пересчитываются от фактического объёма без округления литража. Например 1,57 л считается как 1 первый литр + 0,57 дополнительного литра.</div></div>
+<div class="section card"><div class="section-head"><div><h2>Таблица SKU</h2><div class="subtitle">Фактическая реклама загружается один раз за выбранный период. Изменение цены и расходов пересчитывает юнит-экономику в браузере, не выполняя повторных запросов к WB.</div></div><span class="muted">{{ period_label }}</span></div><div class="sku-matrix-wrap"><table class="sku-matrix" id="unitMatrix"><thead><tr><th class="sticky-product">Товар</th><th>Артикул WB / SKU</th><th>SKU / размер / цвет</th><th>Категория</th><th>Схема</th><th>Цена с СПП</th><th>СПП, %</th><th>Цена до СПП</th><th>Себестоимость</th><th>Комиссия WB, %</th><th>Комиссия WB, ₽</th><th>Склад</th><th>Длина, см</th><th>Ширина, см</th><th>Высота, см</th><th>Объём, л</th><th>1-й литр, ₽</th><th>Доп. литр, ₽</th><th>Логистика, ₽</th><th>Хран. 1-й л/день</th><th>Хран. доп. л/день</th><th>Дней хранения</th><th>Хранение, ₽</th><th>Приёмка, ₽</th><th>Обратная логистика, ₽</th><th>Сценарный ДРР, %</th><th>Налог, %</th><th>Прочие расходы</th><th>Прибыль до рекламы</th><th>Макс ДРР</th><th>Желаемая прибыль</th><th>Целевой ДРР</th><th>Факт ДРР</th><th>Запас по ДРР, п.п.</th><th>Ожид. прибыль</th><th>Расход рекламы</th><th>Рекл. выручка</th><th>Рекл. заказы</th><th>Кампании</th><th>Статус рекламы</th><th>Рекомендация</th><th>Детализация</th><th>Чистая прибыль, ₽</th><th>Маржа, %</th><th>ROI, %</th><th>Точка безуб.</th><th>Мин. цена</th><th>Цена для маржи</th><th>Влияние</th><th>Статус</th></tr></thead><tbody>
+{% for row in rows %}<tr data-row='{{ row.json|safe }}' data-category="{{ row.category }}" data-brand="{{ row.brand }}"><td class="sticky-product"><div class="sku-product-cell"><a href="{{ row.product_url }}" target="_blank" rel="noopener"><img class="sku-img" src="{{ row.photo_url }}" onerror="this.style.display='none'"></a><div><div class="sku-name">{% if row.product_url %}<a class="text-link" href="{{ row.product_url }}" target="_blank" rel="noopener">{{ row.name }}</a>{% else %}{{ row.name }}{% endif %}</div><div class="sku-meta">nmID {{ row.nm_id or '—' }} · факт: {{ units(row.units) }} шт.{% if row.product_url %} · <a class="text-link" href="{{ row.product_url }}" target="_blank" rel="noopener">открыть WB</a>{% endif %}</div></div></div></td><td>{{ row.sku }}</td><td class="muted">{{ row.variant }}</td><td>{{ row.category }}</td><td><select class="js-field scheme-input" data-key="scheme"><option value="fbs">FBS</option><option value="fbw">FBW</option></select></td><td><input class="js-field" data-key="priceSpp" inputmode="decimal"></td><td><input class="js-field" data-key="sppPct" inputmode="decimal"></td><td class="js-priceBeforeSpp">0 ₽</td><td><input class="js-field" data-key="cost" inputmode="decimal"></td><td><input class="js-field" data-key="commissionPct" inputmode="decimal"></td><td class="js-commissionRub">0 ₽</td><td><select class="js-field warehouse-input" data-key="warehouse"><option value="">—</option>{% for wh in warehouse_options %}<option value="{{ wh }}">{{ wh }}</option>{% endfor %}<option value="__fbs_vladikavkaz__">СЦ Владикавказ · ручной FBS</option><option value="__fbs_manual__">Мой FBS-склад вручную</option></select></td><td><input class="js-field dimension-input" data-key="lengthCm" inputmode="decimal"></td><td><input class="js-field dimension-input" data-key="widthCm" inputmode="decimal"></td><td><input class="js-field dimension-input" data-key="heightCm" inputmode="decimal"></td><td class="js-volume volume-cell">0</td><td><input class="js-field logistics-rate-input" data-key="logisticsBase" inputmode="decimal"></td><td><input class="js-field logistics-rate-input" data-key="logisticsLiter" inputmode="decimal"></td><td><input class="js-field" data-key="logistics" inputmode="decimal"></td><td><input class="js-field storage-rate-input" data-key="storageBase" inputmode="decimal"></td><td><input class="js-field storage-rate-input" data-key="storageLiter" inputmode="decimal"></td><td><input class="js-field storage-rate-input" data-key="storageDays" inputmode="decimal"></td><td><input class="js-field" data-key="storage" inputmode="decimal"></td><td><input class="js-field" data-key="acceptance" inputmode="decimal"></td><td><input class="js-field" data-key="returnLogistics" inputmode="decimal"></td><td><input class="js-field" data-key="drr" inputmode="decimal"></td><td><input class="js-field" data-key="taxPct" inputmode="decimal"></td><td><input class="js-field" data-key="other" inputmode="decimal"></td><td class="js-profitBeforeAds">0 ₽</td><td class="js-maxDrr">0%</td><td><input class="js-field" data-key="desiredProfit" inputmode="decimal"></td><td class="js-targetDrr">0%</td><td class="js-factDrr">{% if row.ad.status == 'OK' %}{{ percent(row.ad.factual_drr / 100) }}{% elif row.ad.status == 'SPEND_WITHOUT_SALES' %}∞{% else %}Нет данных{% endif %}</td><td class="js-drrReserve">—</td><td class="js-expectedProfit">—</td><td>{{ money(row.ad.spend) }}</td><td>{{ money(row.ad.revenue) }}</td><td>{{ units(row.ad.orders) }}</td><td>{{ row.ad.campaigns_count }}{% if row.ad.active_campaigns_count %} / {{ row.ad.active_campaigns_count }} активн.{% endif %}</td><td><span class="ad-status {{ 'profit-pos' if row.ad.status == 'OK' else 'profit-neg' if row.ad.status in ['SPEND_WITHOUT_SALES','API_ERROR'] else 'ad-orange' if row.ad.status in ['PARTIAL_DATA','SALES_WITHOUT_SPEND'] else 'ad-gray' }}">{{ row.ad.status }}</span>{% if row.ad.warning_text %}<div class="hint">{{ row.ad.warning_text }}</div>{% endif %}</td><td class="js-adRecommendation muted">—</td><td>{% if row.ad.campaigns %}<details><summary>Показать кампании ({{ row.ad.campaigns_count }})</summary><div class="ad-detail table-wrap"><table><thead><tr><th>ID</th><th>Название</th><th>Тип</th><th>Статус</th><th>Расход</th><th>Заказы</th><th>Выручка</th><th>ДРР</th><th>Показы</th><th>Клики</th><th>CTR</th><th>CPC</th><th>CPO</th><th>Период</th></tr></thead><tbody>{% for c in row.ad.campaigns %}<tr><td>{{ c.campaign_id }}</td><td>{{ c.name or '—' }}</td><td>{{ c.type if c.type is not none else '—' }}{% if c.payment_type %} · {{ c.payment_type }}{% endif %}</td><td>{{ c.status if c.status is not none else '—' }}</td><td>{{ money(c.spend) }}</td><td>{{ units(c.orders) }}</td><td>{{ money(c.revenue) }}</td><td>{% if c.revenue > 0 %}{{ percent(c.factual_drr / 100) }}{% elif c.spend > 0 %}∞{% else %}—{% endif %}</td><td>{{ units(c.impressions) }}</td><td>{{ units(c.clicks) }}</td><td>{{ percent((c.ctr or 0) / 100) }}</td><td>{{ money(c.cpc or 0) }}</td><td>{{ money(c.cpo or 0) }}</td><td>{{ c.period_from }}–{{ c.period_to }}</td></tr>{% endfor %}<tr><th colspan="4">Итого по SKU</th><th>{{ money(row.ad.spend) }}</th><th>{{ units(row.ad.orders) }}</th><th>{{ money(row.ad.revenue) }}</th><th>{% if row.ad.status == 'OK' %}{{ percent(row.ad.factual_drr / 100) }}{% elif row.ad.spend > 0 %}∞{% else %}—{% endif %}</th><th>{{ units(row.ad.impressions) }}</th><th>{{ units(row.ad.clicks) }}</th><th colspan="4"></th></tr></tbody></table></div></details>{% else %}<span class="muted">Кампаний нет</span>{% endif %}</td><td class="js-profit">0 ₽</td><td class="js-margin">0%</td><td class="js-roi">0%</td><td class="js-breakEven">0 ₽</td><td class="js-minPrice">0 ₽</td><td class="js-targetPrice">0 ₽</td><td class="js-impact matrix-impact">0 ₽</td><td><span class="sku-status js-status">—</span></td></tr>{% else %}<tr><td colspan="50" class="empty">Нет товаров за выбранный период.</td></tr>{% endfor %}
+</tbody></table></div><div class="hint"><b>Фактический ДРР = суммарный расход всех кампаний SKU / суммарная рекламная выручка этих кампаний × 100%.</b> Проценты отдельных кампаний не усредняются. Цена до СПП = цена покупателя / (1 − СПП%). Для ручного склада объём Д×Ш×В/1000 не округляется: 1,573 л считается как 1 первый литр + 0,573 дополнительного литра; хранение умножается на заданное число дней.</div></div>
 <script>
 const tariffMaps = {{ tariff_maps|tojson }};
 const initialScenarios = {{ matrix_scenarios|tojson }};
@@ -140,18 +144,19 @@ function cloneExtras(x){ return Object.assign({}, DEFAULT_EXTRAS, x||{}); }
 function setInput(tr,key,value){ const el=tr.querySelector(`[data-key="${key}"]`); if(!el) return; el.value = (typeof value === 'number') ? (Math.round(value*100)/100).toString().replace('.', ',') : (value||''); el.dataset.base = el.value; }
 function volumeLiters(v){ return Math.max(0,(v.lengthCm||0)*(v.widthCm||0)*(v.heightCm||0)/1000); }
 function chargeLiters(vol){ return Math.max(1, vol || 0); }
-function hydrate(){ rows.forEach(tr=>{ const d=JSON.parse(tr.dataset.row); tr._base=d; tr._extras=cloneExtras(d.extras||{}); setInput(tr,'scheme',d.scheme||'fbs'); setInput(tr,'priceSpp',d.priceSpp ?? d.price); setInput(tr,'sppPct',(d.sppPct||0)*100); setInput(tr,'cost',d.cost); setInput(tr,'commissionPct',d.commissionPct*100); setInput(tr,'warehouse',d.warehouse||''); setInput(tr,'lengthCm',d.lengthCm||0); setInput(tr,'widthCm',d.widthCm||0); setInput(tr,'heightCm',d.heightCm||0); setInput(tr,'logisticsBase',d.logisticsBase||0); setInput(tr,'logisticsLiter',d.logisticsLiter||0); setInput(tr,'logistics',d.logistics); setInput(tr,'storage',d.storage); setInput(tr,'drr',d.drr*100); setInput(tr,'taxPct',d.taxPct*100); setInput(tr,'other',d.other); setInput(tr,'desiredProfit',d.desiredProfit ?? 150); recalcRow(tr); }); applyFilters(); renderScenarioSelects(); }
-function values(tr){ const priceSpp=num(tr.querySelector('[data-key="priceSpp"]').value); const sppPct=num(tr.querySelector('[data-key="sppPct"]').value)/100; const denom=Math.max(0.0001,1-sppPct); const priceBeforeSpp=priceSpp/denom; const lengthCm=num(tr.querySelector('[data-key="lengthCm"]')?.value); const widthCm=num(tr.querySelector('[data-key="widthCm"]')?.value); const heightCm=num(tr.querySelector('[data-key="heightCm"]')?.value); return {scheme:tr.querySelector('[data-key="scheme"]').value || 'fbs', priceSpp, sppPct, price:priceBeforeSpp, cost:num(tr.querySelector('[data-key="cost"]').value), commissionPct:num(tr.querySelector('[data-key="commissionPct"]').value)/100, warehouse:tr.querySelector('[data-key="warehouse"]').value, lengthCm, widthCm, heightCm, volume: Math.max(0,lengthCm*widthCm*heightCm/1000), logisticsBase:num(tr.querySelector('[data-key="logisticsBase"]')?.value), logisticsLiter:num(tr.querySelector('[data-key="logisticsLiter"]')?.value), logistics:num(tr.querySelector('[data-key="logistics"]').value), storage:num(tr.querySelector('[data-key="storage"]').value), drr:num(tr.querySelector('[data-key="drr"]').value)/100, taxPct:num(tr.querySelector('[data-key="taxPct"]').value)/100, other:num(tr.querySelector('[data-key="other"]').value), desiredProfit:num(tr.querySelector('[data-key="desiredProfit"]')?.value || 150)}; }
-function calc(v,targetMargin,extras){ const x=cloneExtras(extras); const buyout=Math.max(0.0001, Math.min(1, num(x.buyoutPct||1))); const commissionRub=v.price*v.commissionPct; const adRub=v.price*v.drr; const taxRub=v.price*v.taxPct; const acquiringRub=v.price*num(x.acquiringPct||0); const vatRate=Math.max(0, num(x.vatPct||0)); const vatRub=vatRate>0 ? v.price*(vatRate/(1+vatRate)) : 0; const returnBurden=num(x.returnLogistics||0)*(1-buyout)/buyout; const logisticsTotal=v.logistics+returnBurden; const wbExpenses=commissionRub+logisticsTotal+v.storage+acquiringRub; const directCosts=v.cost+v.other; const profitBeforeAds=v.price-wbExpenses-directCosts-taxRub-vatRub; const adRubFact=v.price*v.drr; const profit=profitBeforeAds-adRubFact; const margin=v.price?profit/v.price*100:0; const roiBase=Math.max(0.0001, v.cost); const roi=roiBase?profit/roiBase*100:0; const maxDrr=v.price?profitBeforeAds/v.price*100:0; const targetDrr=v.price?(profitBeforeAds-v.desiredProfit)/v.price*100:0; const factDrr=v.drr*100; const drrReserve=targetDrr-factDrr; const expectedProfit=profitBeforeAds-adRubFact; const percentNoDrr=v.commissionPct+v.taxPct+num(x.acquiringPct||0)+(vatRate>0 ? vatRate/(1+vatRate) : 0); const fixed=v.cost+logisticsTotal+v.storage+v.other; const breakEven=(1-percentNoDrr-v.drr)>0.0001?fixed/(1-percentNoDrr-v.drr):0; const targetPrice=(1-percentNoDrr-v.drr-targetMargin)>0.0001?fixed/(1-percentNoDrr-v.drr-targetMargin):0; let rec='Работает в пределах нормы', recCls='warn'; if(factDrr<=targetDrr){ rec='Можно увеличить бюджет'; recCls='good'; } if(factDrr>targetDrr && factDrr<=targetDrr+3){ rec='Работает в пределах нормы'; recCls='warn'; } if(factDrr>targetDrr+3){ rec='Снизьте ставки / оптимизируйте'; recCls='bad'; } if(factDrr>maxDrr){ rec='Реклама убыточна'; recCls='bad'; } return {commissionRub,adRub:adRubFact,taxRub,acquiringRub,vatRub,returnBurden,logisticsTotal,profitBeforeAds,maxDrr,targetDrr,factDrr,drrReserve,expectedProfit,rec,recCls,profit,margin,roi,breakEven,minPrice:breakEven,targetPrice}; }
-function recalcRow(tr){ const targetMargin=num(document.getElementById('targetMarginInput').value)/100; const v=values(tr); const c=calc(v,targetMargin,tr._extras||DEFAULT_EXTRAS); const base=tr._base||{}; const impact=c.profit-(base.baseProfit??0); tr.querySelector('.js-volume').textContent=(Math.round(v.volume*1000)/1000).toString().replace('.', ','); tr.querySelector('.js-priceBeforeSpp').textContent=money(v.price); tr.querySelector('.js-commissionRub').textContent=money(c.commissionRub); tr.querySelector('.js-profitBeforeAds').textContent=money(c.profitBeforeAds); tr.querySelector('.js-maxDrr').textContent=pct(c.maxDrr); tr.querySelector('.js-targetDrr').textContent=pct(c.targetDrr); tr.querySelector('.js-factDrr').textContent=pct(c.factDrr); tr.querySelector('.js-drrReserve').textContent=(c.drrReserve>=0?'+':'')+pct(c.drrReserve); tr.querySelector('.js-drrReserve').className='js-drrReserve '+(c.drrReserve>=0?'profit-pos':(c.drrReserve>=-3?'value warn':'profit-neg')); tr.querySelector('.js-expectedProfit').textContent=money(c.expectedProfit); tr.querySelector('.js-expectedProfit').className='js-expectedProfit '+(c.expectedProfit>=0?'profit-pos':'profit-neg'); const recEl=tr.querySelector('.js-adRecommendation'); recEl.textContent=c.rec; recEl.className='js-adRecommendation '+(c.recCls==='good'?'profit-pos':c.recCls==='bad'?'profit-neg':'value warn'); tr.querySelector('.js-profit').textContent=money(c.profit); tr.querySelector('.js-profit').className='js-profit '+(c.profit>=0?'profit-pos':'profit-neg'); tr.querySelector('.js-margin').textContent=pct(c.margin); tr.querySelector('.js-margin').className='js-margin '+(c.margin>=10?'profit-pos':c.margin>=0?'value warn':'profit-neg'); tr.querySelector('.js-roi').textContent=pct(c.roi); tr.querySelector('.js-breakEven').textContent=money(c.breakEven); tr.querySelector('.js-minPrice').textContent=money(c.minPrice); tr.querySelector('.js-targetPrice').textContent=money(c.targetPrice); tr.querySelector('.js-impact').textContent=(impact>=0?'+':'')+money(impact); tr.querySelector('.js-impact').className='js-impact matrix-impact '+(impact>=0?'pos':'neg'); const st=tr.querySelector('.js-status'); let status='Прибыльный', cls='good'; if(c.profit<0){status='Убыточный';cls='bad'} else if(c.margin<5){status='На грани';cls='warn'} st.textContent=status; st.className='sku-status js-status '+cls; tr.dataset.status=cls; tr.dataset.margin=String(c.margin); tr.dataset.warehouse=v.warehouse; tr.dataset.scheme=v.scheme; tr._calc=c; tr.querySelectorAll('.js-field').forEach(el=>{el.classList.toggle('changed', String(el.value)!==String(el.dataset.base||''));}); }
+function hydrate(){ rows.forEach(tr=>{ const d=JSON.parse(tr.dataset.row); tr._base=d; tr._extras=cloneExtras(d.extras||{}); ['scheme','priceSpp','cost','warehouse','lengthCm','widthCm','heightCm','logisticsBase','logisticsLiter','logistics','storageBase','storageLiter','storageDays','storage','acceptance','returnLogistics','other','desiredProfit'].forEach(k=>setInput(tr,k,d[k]??0)); setInput(tr,'sppPct',(d.sppPct||0)*100); setInput(tr,'commissionPct',(d.commissionPct||0)*100); setInput(tr,'drr',(d.drr||0)*100); setInput(tr,'taxPct',(d.taxPct||0)*100); recalcRow(tr); }); applyFilters(); renderScenarioSelects(); }
+function values(tr){ const priceSpp=num(tr.querySelector('[data-key="priceSpp"]').value); const sppPct=num(tr.querySelector('[data-key="sppPct"]').value)/100; const denom=Math.max(0.0001,1-sppPct); const lengthCm=num(tr.querySelector('[data-key="lengthCm"]')?.value), widthCm=num(tr.querySelector('[data-key="widthCm"]')?.value), heightCm=num(tr.querySelector('[data-key="heightCm"]')?.value); return {scheme:tr.querySelector('[data-key="scheme"]').value||'fbs',priceSpp,sppPct,price:priceSpp/denom,cost:num(tr.querySelector('[data-key="cost"]').value),commissionPct:num(tr.querySelector('[data-key="commissionPct"]').value)/100,warehouse:tr.querySelector('[data-key="warehouse"]').value,lengthCm,widthCm,heightCm,volume:Math.max(0,lengthCm*widthCm*heightCm/1000),logisticsBase:num(tr.querySelector('[data-key="logisticsBase"]')?.value),logisticsLiter:num(tr.querySelector('[data-key="logisticsLiter"]')?.value),logistics:num(tr.querySelector('[data-key="logistics"]').value),storageBase:num(tr.querySelector('[data-key="storageBase"]')?.value),storageLiter:num(tr.querySelector('[data-key="storageLiter"]')?.value),storageDays:num(tr.querySelector('[data-key="storageDays"]')?.value),storage:num(tr.querySelector('[data-key="storage"]').value),acceptance:num(tr.querySelector('[data-key="acceptance"]')?.value),returnLogistics:num(tr.querySelector('[data-key="returnLogistics"]')?.value),drr:num(tr.querySelector('[data-key="drr"]').value)/100,taxPct:num(tr.querySelector('[data-key="taxPct"]').value)/100,other:num(tr.querySelector('[data-key="other"]').value),desiredProfit:num(tr.querySelector('[data-key="desiredProfit"]')?.value||150)}; }
+function calc(v,targetMargin,extras,ad){ const x=cloneExtras(extras); const buyout=Math.max(0.0001,Math.min(1,num(x.buyoutPct||1))); const commissionRub=v.price*v.commissionPct, taxRub=v.price*v.taxPct, acquiringRub=v.price*num(x.acquiringPct||0); const vatRate=Math.max(0,num(x.vatPct||0)), vatRub=vatRate>0?v.price*(vatRate/(1+vatRate)):0; const returnRate=v.returnLogistics||num(x.returnLogistics||0), returnBurden=returnRate*(1-buyout)/buyout; const logisticsTotal=v.logistics+returnBurden; const wbExpenses=commissionRub+logisticsTotal+v.storage+v.acceptance+acquiringRub; const directCosts=v.cost+v.other; const profitBeforeAds=v.price-wbExpenses-directCosts-taxRub-vatRub; const adRubScenario=v.price*v.drr; const profit=profitBeforeAds-adRubScenario; const margin=v.price?profit/v.price*100:0, roi=v.cost?profit/v.cost*100:0; const maxDrr=v.price?profitBeforeAds/v.price*100:0, targetDrr=v.price?(profitBeforeAds-v.desiredProfit)/v.price*100:0; const adStatus=String(ad?.status||'API_ERROR'); const factDrr=(adStatus==='OK'&&ad?.factual_drr!==null&&ad?.factual_drr!==undefined)?num(ad.factual_drr):null; const drrReserve=factDrr===null?null:targetDrr-factDrr; const expectedProfit=factDrr===null?null:profitBeforeAds-v.price*(factDrr/100); const percentNoDrr=v.commissionPct+v.taxPct+num(x.acquiringPct||0)+(vatRate>0?vatRate/(1+vatRate):0); const fixed=v.cost+logisticsTotal+v.storage+v.acceptance+v.other; const breakEven=(1-percentNoDrr-v.drr)>0.0001?fixed/(1-percentNoDrr-v.drr):0, targetPrice=(1-percentNoDrr-v.drr-targetMargin)>0.0001?fixed/(1-percentNoDrr-v.drr-targetMargin):0; let rec='',recCls='gray'; if(adStatus==='NO_ADS') rec='Реклама не запускалась. Можно протестировать кампанию, если органическая маржа позволяет.'; else if(adStatus==='SPEND_WITHOUT_SALES'){rec='Реклама расходует бюджет без продаж. Проверьте ставки, поисковые кластеры, релевантность запросов и карточку товара.';recCls='bad';} else if(adStatus==='PARTIAL_DATA'){rec='Данные неполные. Не изменяйте бюджет до повторной синхронизации рекламной статистики.';recCls='orange';} else if(adStatus==='API_ERROR'){rec='Рекламные данные недоступны. Повторите синхронизацию; бюджет пока не изменяйте.';recCls='bad';} else if(adStatus==='SALES_WITHOUT_SPEND'){rec='Есть рекламные продажи без расхода. Дождитесь полной статистики WB.';recCls='orange';} else if(factDrr>maxDrr){rec='Реклама убыточна. Фактический ДРР выше максимально допустимого. Снизьте ставки или остановите неэффективные кампании.';recCls='bad';} else if(factDrr>targetDrr+3){rec='Реклама выше целевого ДРР. Оптимизируйте ставки, запросы и площадки.';recCls='bad';} else if(factDrr>targetDrr){rec='Реклама работает около границы целевого значения. Масштабировать бюджет пока не рекомендуется.';recCls='warn';} else if((targetDrr-factDrr)>=3||(targetDrr>0&&(targetDrr-factDrr)/targetDrr>=.2)){rec='Есть запас по ДРР. Можно постепенно увеличить бюджет или ставку и контролировать прибыль.';recCls='good';} else {rec='Реклама работает в пределах нормы.';recCls='good';} if(expectedProfit!==null&&expectedProfit<0){rec='Даже при текущем ДРР товар уходит в минус. Проверьте цену, себестоимость, комиссию и рекламные расходы.';recCls='bad';} let adColor=recCls; if(adStatus==='OK') adColor=factDrr<=targetDrr?'good':factDrr<=targetDrr+3&&factDrr<=maxDrr?'warn':'bad'; else if(adStatus==='NO_ADS') adColor='gray'; else if(['PARTIAL_DATA','SALES_WITHOUT_SPEND'].includes(adStatus)) adColor='orange'; else adColor='bad'; return {commissionRub,adRub:adRubScenario,taxRub,acquiringRub,vatRub,returnBurden,logisticsTotal,profitBeforeAds,maxDrr,targetDrr,factDrr,drrReserve,expectedProfit,rec,recCls,adColor,adStatus,profit,margin,roi,breakEven,minPrice:breakEven,targetPrice}; }
+function recalcRow(tr){ const targetMargin=num(document.getElementById('targetMarginInput').value)/100,v=values(tr),base=tr._base||{},c=calc(v,targetMargin,tr._extras||DEFAULT_EXTRAS,base.ad||{}),impact=c.profit-(base.baseProfit??0); tr.querySelector('.js-volume').textContent=(Math.round(v.volume*1000)/1000).toString().replace('.',','); tr.querySelector('.js-priceBeforeSpp').textContent=money(v.price); tr.querySelector('.js-commissionRub').textContent=money(c.commissionRub); tr.querySelector('.js-profitBeforeAds').textContent=money(c.profitBeforeAds); tr.querySelector('.js-maxDrr').textContent=pct(c.maxDrr); tr.querySelector('.js-targetDrr').textContent=pct(c.targetDrr); const fact=tr.querySelector('.js-factDrr'); fact.textContent=c.adStatus==='SPEND_WITHOUT_SALES'?'∞':c.factDrr===null?'Нет данных':pct(c.factDrr); fact.className='js-factDrr '+(c.adColor==='good'?'profit-pos':c.adColor==='bad'?'profit-neg':c.adColor==='orange'?'ad-orange':c.adColor==='gray'?'ad-gray':'value warn'); const reserve=tr.querySelector('.js-drrReserve'); reserve.textContent=c.drrReserve===null?'—':(c.drrReserve>=0?'+':'')+pct(c.drrReserve); reserve.className='js-drrReserve '+(c.drrReserve===null?'ad-gray':c.drrReserve>=0?'profit-pos':c.drrReserve>=-3?'value warn':'profit-neg'); const expected=tr.querySelector('.js-expectedProfit'); expected.textContent=c.expectedProfit===null?'Нет данных':money(c.expectedProfit); expected.className='js-expectedProfit '+(c.expectedProfit===null?'ad-gray':c.expectedProfit>=0?'profit-pos':'profit-neg'); const recEl=tr.querySelector('.js-adRecommendation'); recEl.textContent=c.rec; recEl.className='js-adRecommendation '+(c.recCls==='good'?'profit-pos':c.recCls==='bad'?'profit-neg':c.recCls==='orange'?'ad-orange':c.recCls==='gray'?'ad-gray':'value warn'); tr.querySelector('.js-profit').textContent=money(c.profit); tr.querySelector('.js-profit').className='js-profit '+(c.profit>=0?'profit-pos':'profit-neg'); tr.querySelector('.js-margin').textContent=pct(c.margin); tr.querySelector('.js-margin').className='js-margin '+(c.margin>=10?'profit-pos':c.margin>=0?'value warn':'profit-neg'); tr.querySelector('.js-roi').textContent=pct(c.roi); tr.querySelector('.js-breakEven').textContent=money(c.breakEven); tr.querySelector('.js-minPrice').textContent=money(c.minPrice); tr.querySelector('.js-targetPrice').textContent=money(c.targetPrice); tr.querySelector('.js-impact').textContent=(impact>=0?'+':'')+money(impact); tr.querySelector('.js-impact').className='js-impact matrix-impact '+(impact>=0?'pos':'neg'); const st=tr.querySelector('.js-status'); let status='Прибыльный',cls='good'; if(c.profit<0){status='Убыточный';cls='bad'}else if(c.margin<5){status='На грани';cls='warn'} st.textContent=status;st.className='sku-status js-status '+cls;tr.dataset.status=cls;tr.dataset.margin=String(c.margin);tr.dataset.warehouse=v.warehouse;tr.dataset.scheme=v.scheme;tr._calc=c;tr.querySelectorAll('.js-field').forEach(el=>el.classList.toggle('changed',String(el.value)!==String(el.dataset.base||''))); }
 function recalcAll(){ rows.forEach(recalcRow); updateTotals(); applyFilters(false); }
 function aggregateTotals(sourceRows=rows){ let visible=0, profit=0, impact=0, revenue=0, bad=0, warn=0; sourceRows.forEach(tr=>{ if(tr.style.display==='none') return; visible++; const c=tr._calc||{}; const v=values(tr); profit+=c.profit||0; impact+=(c.profit-(tr._base?.baseProfit||0)); revenue+=v.price; if(tr.dataset.status==='bad') bad++; if(tr.dataset.status==='warn') warn++;}); return {visible,profit,impact,revenue,bad,warn,margin:revenue?profit/revenue*100:0}; }
 function updateTotals(){ const t=aggregateTotals(); document.getElementById('visibleCount').textContent=t.visible; document.getElementById('totalProfit').textContent=money(t.profit); document.getElementById('totalImpact').textContent=(t.impact>=0?'+':'')+money(t.impact); document.getElementById('totalImpact').className='value '+(t.impact>=0?'good':'bad'); document.getElementById('avgMargin').textContent=pct(t.margin); document.getElementById('badCount').textContent=`${t.bad} / ${t.warn}`; }
 function tariffFor(v){ if(v.warehouse==='__fbs_vladikavkaz__' || v.warehouse==='__fbs_manual__') return null; const map=tariffMaps[v.scheme] || {}; return map[v.warehouse] || null; }
-function recalcLogisticsFromRates(tr, force=false){ const v=values(tr); const hasRates=(v.logisticsBase||v.logisticsLiter); if(!force && !hasRates) return false; const logRub=(v.logisticsBase||0)+Math.max(0,v.volume-1)*(v.logisticsLiter||0); const log=tr.querySelector('[data-key="logistics"]'); log.value=String(Math.round(logRub*100)/100).replace('.', ','); return true; }
-function applyTariff(tr){ const v=values(tr); const t=tariffFor(v); if(!t) { recalcLogisticsFromRates(tr,false); recalcRow(tr); updateTotals(); return; } const base=tr.querySelector('[data-key="logisticsBase"]'); const liter=tr.querySelector('[data-key="logisticsLiter"]'); base.value=String(Math.round((t.base||0)*100)/100).replace('.', ','); liter.value=String(Math.round((t.liter||0)*100)/100).replace('.', ','); const vv=values(tr); const logRub=(vv.logisticsBase||0)+Math.max(0,vv.volume-1)*(vv.logisticsLiter||0); const storageRub=(t.storageBase||0)+Math.max(0,vv.volume-1)*(t.storageLiter||0); tr.querySelector('[data-key="logistics"]').value=String(Math.round(logRub*100)/100).replace('.', ','); tr.querySelector('[data-key="storage"]').value=String(Math.round(storageRub*100)/100).replace('.', ','); recalcRow(tr); updateTotals(); }
+function recalcWarehouseCosts(tr,force=false){ const v=values(tr),extra=Math.max(0,v.volume-1); if(force||v.logisticsBase||v.logisticsLiter) tr.querySelector('[data-key="logistics"]').value=String(Math.round((v.logisticsBase+extra*v.logisticsLiter)*100)/100).replace('.',','); if(force||v.storageBase||v.storageLiter){const total=(v.storageBase+extra*v.storageLiter)*Math.max(0,v.storageDays);tr.querySelector('[data-key="storage"]').value=String(Math.round(total*100)/100).replace('.',',');} }
+function applyTariff(tr){ const v=values(tr),t=tariffFor(v); if(t){tr.querySelector('[data-key="logisticsBase"]').value=String(t.base||0).replace('.',',');tr.querySelector('[data-key="logisticsLiter"]').value=String(t.liter||0).replace('.',',');tr.querySelector('[data-key="storageBase"]').value=String(t.storageBase||0).replace('.',',');tr.querySelector('[data-key="storageLiter"]').value=String(t.storageLiter||0).replace('.',',');if(num(tr.querySelector('[data-key="storageDays"]').value)<=0)tr.querySelector('[data-key="storageDays"]').value='1';} recalcWarehouseCosts(tr,!!t);recalcRow(tr);updateTotals(); }
 function applyFilters(doTotals=true){ const fc=document.getElementById('filterCategory').value, fb=document.getElementById('filterBrand').value, fw=document.getElementById('filterWarehouse').value, fs=document.getElementById('filterStatus').value, fm=num(document.getElementById('filterMargin').value); rows.forEach(tr=>{let ok=true; if(fc&&tr.dataset.category!==fc) ok=false; if(fb&&tr.dataset.brand!==fb) ok=false; if(fw&&tr.dataset.warehouse!==fw) ok=false; if(fs&&tr.dataset.status!==fs) ok=false; if(fm&&num(tr.dataset.margin)<fm) ok=false; tr.style.display=ok?'':'none';}); if(doTotals) updateTotals(); }
-function currentPayload(){ return {version:45.1, savedAt:new Date().toISOString(), targetMargin:num(document.getElementById('targetMarginInput').value), rows:rows.map(tr=>({sku:tr._base.sku, nmId:tr._base.nmId, name:tr.querySelector('.sku-name')?.textContent?.trim()||tr._base.sku, values:values(tr), extras:cloneExtras(tr._extras||{}), calc:tr._calc, baseProfit:tr._base.baseProfit||0}))}; }
+function scenarioCalc(c){ const out={...(c||{})}; ['factDrr','drrReserve','expectedProfit','rec','recCls','adColor','adStatus'].forEach(k=>delete out[k]); return out; }
+function currentPayload(){ return {version:46, savedAt:new Date().toISOString(), targetMargin:num(document.getElementById('targetMarginInput').value), rows:rows.map(tr=>({sku:tr._base.sku, nmId:tr._base.nmId, name:tr.querySelector('.sku-name')?.textContent?.trim()||tr._base.sku, values:values(tr), extras:cloneExtras(tr._extras||{}), calc:scenarioCalc(tr._calc), baseProfit:tr._base.baseProfit||0}))}; }
 function renderScenarioSelects(){ const selects=[document.getElementById('scenarioSelect'), document.getElementById('compareScenarioSelect')]; selects.forEach(sel=>{ if(!sel) return; const cur=sel.value; sel.innerHTML='<option value="">— выбрать сценарий —</option>' + savedScenarios.map(x=>`<option value="${x.id}">${escapeHtml(x.name)} · ${escapeHtml(x.updated_at||'')}</option>`).join(''); sel.value=cur; }); }
 function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 async function api(url, options={}){ const resp=await fetch(url,{headers:{'Content-Type':'application/json'},...options}); if(!resp.ok){let msg='Ошибка запроса'; try{msg=(await resp.json()).error||msg}catch(e){} throw new Error(msg)} if(resp.status===204) return {}; return await resp.json(); }
@@ -175,7 +180,7 @@ function calcScenarioValuesFromQuery(query){
   const locCoef = Math.max(0.0001, n('localization_pct',1) || 1);
   const outbound=baseLog * locCoef;
   const purchase=n('purchase_price',0);
-  const other=n('acceptance',0)+n('mp_delivery',0)+n('packaging_cost',0)+n('tariff_options',0)+n('other_cost',0)+purchase*rate('defect_pct',0);
+  const other=n('mp_delivery',0)+n('packaging_cost',0)+n('tariff_options',0)+n('other_cost',0)+purchase*rate('defect_pct',0);
   const storage=n('turnover_days',0)*n('storage_per_day',0);
   const wh=(get('warehouse','')||'').trim();
   let warehouse=wh;
@@ -199,7 +204,12 @@ function calcScenarioValuesFromQuery(query){
     logisticsBase: n('base_logistics',0),
     logisticsLiter: n('extra_liter_cost',0),
     logistics: outbound,
+    storageBase: n('storage_per_day',0),
+    storageLiter: 0,
+    storageDays: n('turnover_days',0),
     storage: storage,
+    acceptance: n('acceptance',0),
+    returnLogistics: n('return_logistics',0),
     drr: rate('drr_pct',0)*100,
     taxPct: rate('tax_pct',0.06)*100,
     other: other,
@@ -234,7 +244,7 @@ function ensureWarehouseOption(tr,value,label){
   }
 }
 function applyCalcScenarioToRow(tr, sc, onlyMissing=false){
-  const keys=['scheme','priceSpp','sppPct','cost','commissionPct','warehouse','lengthCm','widthCm','heightCm','logisticsBase','logisticsLiter','logistics','storage','drr','taxPct','other','desiredProfit'];
+  const keys=['scheme','priceSpp','sppPct','cost','commissionPct','warehouse','lengthCm','widthCm','heightCm','logisticsBase','logisticsLiter','logistics','storageBase','storageLiter','storageDays','storage','acceptance','returnLogistics','drr','taxPct','other','desiredProfit'];
   if(sc.warehouse && String(sc.warehouse).startsWith('__calc_manual__:')) ensureWarehouseOption(tr, sc.warehouse, sc.manualWarehouseName||sc.warehouse.replace('__calc_manual__:',''));
   keys.forEach(key=>{
     const val=sc[key];
@@ -261,7 +271,7 @@ function applyCalcScenarios(onlyMissing=false){
   document.getElementById('scenarioStatus').textContent = (onlyMissing?'Заполнены пустые поля':'Подтянуты настройки') + ' из калькулятора: ' + applied + ' SKU' + (noMatch?(' · без совпадения: '+noMatch):'');
 }
 
-document.addEventListener('input',e=>{ if(e.target.classList.contains('js-field')){ const tr=e.target.closest('tr'); if(e.target.classList.contains('dimension-input') || e.target.classList.contains('logistics-rate-input')) applyTariff(tr); else {recalcRow(tr); updateTotals();} } if(['filterMargin'].includes(e.target.id)) applyFilters(); });
+document.addEventListener('input',e=>{ if(e.target.classList.contains('js-field')){ const tr=e.target.closest('tr'); if(e.target.classList.contains('dimension-input') || e.target.classList.contains('logistics-rate-input') || e.target.classList.contains('storage-rate-input')) applyTariff(tr); else {recalcRow(tr); updateTotals();} } if(['filterMargin'].includes(e.target.id)) applyFilters(); });
 document.addEventListener('change',e=>{ if(e.target.classList.contains('warehouse-input') || e.target.classList.contains('scheme-input')) applyTariff(e.target.closest('tr')); if(e.target.id && e.target.id.startsWith('filter')) applyFilters(); });
 document.getElementById('targetMarginInput').addEventListener('input', recalcAll);
 document.getElementById('resetScenarioBtn').onclick=()=>{hydrate(); document.getElementById('scenarioStatus').textContent='Изменения сброшены'; document.getElementById('scenarioCompare').style.display='none';};
@@ -278,7 +288,7 @@ document.getElementById('fillMissingCalcScenariosBtn').onclick=()=>applyCalcScen
 hydrate();
 loadScenarioList();
 </script>
-<footer>Интерактивная SKU-юнитка v45.1 · исправлено восстановление процентов в сценариях</footer></div></body></html>
+<footer>Интерактивная SKU-юнитка v46 · точный ДРР и диагностика рекламных кампаний</footer></div></body></html>
 """
 
 
@@ -758,6 +768,12 @@ def _date_input(value: date) -> str:
 
 def _date_display(value: date) -> str:
     return "Базовая" if value == date(1900, 1, 1) else value.strftime("%d.%m.%Y")
+
+
+def _date_time_display(value: datetime | None) -> str:
+    if not value:
+        return "—"
+    return value.astimezone().strftime("%d.%m.%Y %H:%M") if value.tzinfo else value.strftime("%d.%m.%Y %H:%M")
 
 
 def _number_input(value: float) -> str:
@@ -1550,8 +1566,13 @@ def _calculate_unit_plan(values: DotDict) -> tuple[DotDict, list[dict[str, str]]
     # This avoids subtracting WB commissions/taxes from an already discounted buyer price.
     price = price_spp / (1.0 - spp_rate) if spp_rate > 0 else price_spp
     buyout = max(0.0001, min(1.0, float(values.buyout_pct or 0)))
-    volume_liters = max(0.0, float(values.length_cm or 0) * float(values.width_cm or 0) * float(values.height_cm or 0) / 1000.0)
-    base_logistics = float(values.base_logistics or 0) + max(0.0, volume_liters - 1.0) * float(values.extra_liter_cost or 0)
+    volume_liters, base_logistics, _manual_storage = manual_warehouse_costs(
+        float(values.length_cm or 0),
+        float(values.width_cm or 0),
+        float(values.height_cm or 0),
+        float(values.base_logistics or 0),
+        float(values.extra_liter_cost or 0),
+    )
     # Тариф уже подтянут как итоговый для склада. Поправка к тарифу нужна только для ручной корректировки.
     localization_coef = float(values.localization_pct or 1.0)
     if localization_coef <= 0:
@@ -1900,12 +1921,16 @@ def _unit_matrix_row_from_summary(row: Any, detail: dict[str, Any] | None = None
     # If saved profit exists, use it as comparison base; scenario formula remains transparent.
     base_profit = _div(profit, units) if abs(profit) > 0.000001 else base_profit
     nm_id = getattr(row, "nm_id", None)
+    nm_ids = [int(value) for value in (getattr(row, "nm_ids", None) or []) if value]
+    if nm_id and int(nm_id) not in nm_ids:
+        nm_ids.insert(0, int(nm_id))
     sku = str(getattr(row, "sku", "") or "")
     name = str(getattr(row, "name", "") or sku or "Товар")
     data = {
         "sku": sku,
         "name": name,
         "nmId": int(nm_id) if nm_id else 0,
+        "nmIds": nm_ids,
         "scheme": "fbs",
         "priceSpp": round(price, 2),
         "sppPct": 0.0,
@@ -1919,7 +1944,12 @@ def _unit_matrix_row_from_summary(row: Any, detail: dict[str, Any] | None = None
         "logisticsBase": 0.0,
         "logisticsLiter": 0.0,
         "logistics": round(logistics, 2),
+        "storageBase": 0.0,
+        "storageLiter": 0.0,
+        "storageDays": 0.0,
         "storage": round(storage, 2),
+        "acceptance": 0.0,
+        "returnLogistics": 0.0,
         "drr": round(drr, 6),
         "taxPct": round(tax_pct, 6),
         "other": round(other, 2),
@@ -1931,6 +1961,7 @@ def _unit_matrix_row_from_summary(row: Any, detail: dict[str, Any] | None = None
         sku=sku,
         name=name,
         nm_id=nm_id,
+        nm_ids=nm_ids,
         units=units,
         variant=sku,
         category="—",
@@ -1980,6 +2011,7 @@ def _sku_summary_from_sales(rows: list[Any]) -> list[SimpleNamespace]:
             "tax": 0.0,
             "profit": 0.0,
             "nm_id": 0,
+            "nm_ids": [],
         })
         if not item.get("name") or item.get("name") == sku:
             item["name"] = getattr(row, "name", "") or sku
@@ -1988,6 +2020,12 @@ def _sku_summary_from_sales(rows: list[Any]) -> list[SimpleNamespace]:
                 item["nm_id"] = int(getattr(row, "nm_id", 0) or 0)
             except (TypeError, ValueError):
                 item["nm_id"] = 0
+        try:
+            current_nm_id = int(getattr(row, "nm_id", 0) or 0)
+        except (TypeError, ValueError):
+            current_nm_id = 0
+        if current_nm_id and current_nm_id not in item["nm_ids"]:
+            item["nm_ids"].append(current_nm_id)
         item["units"] += float(getattr(row, "quantity", 0.0) or 0.0)
         item["revenue"] += float(getattr(row, "revenue", 0.0) or 0.0)
         item["cogs"] += float(getattr(row, "cogs", 0.0) or 0.0)
@@ -2738,7 +2776,15 @@ def _wb_request_json(method: str, url: str, *, params: dict[str, Any] | None = N
             return json.loads(raw)
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:700]
-        raise RuntimeError(f"WB API {exc.code}: {detail}") from exc
+        logger.exception("WB API вернул HTTP %s для %s %s: %s", exc.code, method.upper(), url, detail)
+        if exc.code in {401, 403}:
+            raise RuntimeError("WB отклонил токен или у токена нет доступа к нужной категории API.") from exc
+        if exc.code == 429:
+            raise RuntimeError("WB временно ограничил частоту запросов. Повторите синхронизацию позже.") from exc
+        raise RuntimeError(f"WB API вернул ошибку {exc.code}.") from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        logger.exception("Не удалось выполнить %s-запрос к WB API %s", method.upper(), url)
+        raise RuntimeError("Не удалось соединиться с WB API или ответ не получен вовремя.") from exc
 
 
 def _same_len_previous_period(date_from: date, date_to: date) -> tuple[date, date]:
@@ -2782,80 +2828,200 @@ def _load_sales_funnel(date_from: date, date_to: date, *, limit_pages: int = 5) 
     return products, warnings
 
 
-def _extract_campaign_ids(payload: Any) -> list[int]:
-    result: list[int] = []
-    if not isinstance(payload, dict):
-        return result
-    for group in payload.get("adverts", []) or []:
-        status = int(group.get("status") or 0)
-        if status not in {7, 9, 11}:
-            continue
-        for item in group.get("advert_list", []) or []:
-            try:
-                result.append(int(item.get("advertId")))
-            except Exception:
-                pass
-    return sorted(set(result))
+AD_CACHE_TTL = timedelta(hours=1)
 
 
-def _flatten_ad_stats(payload: Any) -> dict[int, dict[str, Any]]:
-    by_nm: dict[int, dict[str, Any]] = {}
-    if not isinstance(payload, list):
-        return by_nm
+def _ensure_ad_cache_tables() -> None:
+    with _scenario_connect() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS sku_ad_stats_cache (
+                    id BIGSERIAL PRIMARY KEY,
+                    nm_id BIGINT NOT NULL,
+                    sku TEXT NOT NULL DEFAULT '',
+                    date_from DATE NOT NULL,
+                    date_to DATE NOT NULL,
+                    ad_spend NUMERIC NOT NULL DEFAULT 0,
+                    ad_revenue NUMERIC NOT NULL DEFAULT 0,
+                    ad_orders NUMERIC NOT NULL DEFAULT 0,
+                    impressions NUMERIC NOT NULL DEFAULT 0,
+                    clicks NUMERIC NOT NULL DEFAULT 0,
+                    campaigns_count INTEGER NOT NULL DEFAULT 0,
+                    active_campaigns_count INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT 'OK',
+                    warning_text TEXT NOT NULL DEFAULT '',
+                    campaigns_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+                    fetched_at TIMESTAMPTZ NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE (nm_id, date_from, date_to)
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ad_stats_sync_runs (
+                    id BIGSERIAL PRIMARY KEY,
+                    date_from DATE NOT NULL,
+                    date_to DATE NOT NULL,
+                    status TEXT NOT NULL,
+                    warnings_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+                    fetched_at TIMESTAMPTZ NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE (date_from, date_to)
+                )
+                """
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_sku_ad_cache_period ON sku_ad_stats_cache(date_from, date_to)")
 
-    def add_nm(nm_id: int, name: str, views=0, clicks=0, atbs=0, orders=0, shks=0, spend=0, sum_price=0):
-        if not nm_id:
-            return
-        row = by_nm.setdefault(int(nm_id), {"nm_id": int(nm_id), "name": name or "", "views": 0.0, "clicks": 0.0, "atbs": 0.0, "orders": 0.0, "shks": 0.0, "sum": 0.0, "sum_price": 0.0})
-        if name and not row.get("name"):
-            row["name"] = name
-        row["views"] += float(views or 0)
-        row["clicks"] += float(clicks or 0)
-        row["atbs"] += float(atbs or 0)
-        row["orders"] += float(orders or 0)
-        row["shks"] += float(shks or 0)
-        row["sum"] += float(spend or 0)
-        row["sum_price"] += float(sum_price or 0)
 
-    for camp in payload:
-        for day in camp.get("days", []) or []:
-            for app_item in day.get("apps", []) or []:
-                for nm in app_item.get("nms") or []:
-                    add_nm(
-                        int(nm.get("nmId") or nm.get("nm") or 0),
-                        str(nm.get("name") or ""),
-                        nm.get("views"), nm.get("clicks"), nm.get("atbs"), nm.get("orders"), nm.get("shks"), nm.get("sum"), nm.get("sum_price"),
+def _read_ad_stats_cache(date_from: date, date_to: date) -> dict[str, Any] | None:
+    if not database_enabled():
+        return None
+    try:
+        _ensure_ad_cache_tables()
+        with _scenario_connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT status, warnings_json, fetched_at FROM ad_stats_sync_runs WHERE date_from = %s AND date_to = %s",
+                    (date_from, date_to),
+                )
+                sync = cursor.fetchone()
+                if not sync:
+                    return None
+                cursor.execute(
+                    """
+                    SELECT nm_id, sku, ad_spend, ad_revenue, ad_orders, impressions, clicks,
+                           campaigns_count, active_campaigns_count, status, warning_text,
+                           campaigns_json, fetched_at
+                    FROM sku_ad_stats_cache
+                    WHERE date_from = %s AND date_to = %s
+                    """,
+                    (date_from, date_to),
+                )
+                by_nm: dict[int, dict[str, Any]] = {}
+                for raw in cursor.fetchall():
+                    campaigns = raw.get("campaigns_json") or []
+                    if isinstance(campaigns, str):
+                        campaigns = json.loads(campaigns)
+                    nm_id = int(raw.get("nm_id") or 0)
+                    spend = float(raw.get("ad_spend") or 0)
+                    revenue = float(raw.get("ad_revenue") or 0)
+                    orders = float(raw.get("ad_orders") or 0)
+                    impressions = float(raw.get("impressions") or 0)
+                    clicks = float(raw.get("clicks") or 0)
+                    by_nm[nm_id] = {
+                        "nm_id": nm_id,
+                        "sku": raw.get("sku") or "",
+                        "name": "",
+                        "spend": spend,
+                        "revenue": revenue,
+                        "orders": orders,
+                        "impressions": impressions,
+                        "clicks": clicks,
+                        "atbs": sum(float(item.get("atbs") or 0) for item in campaigns),
+                        "shks": sum(float(item.get("shks") or 0) for item in campaigns),
+                        "campaigns_count": int(raw.get("campaigns_count") or 0),
+                        "active_campaigns_count": int(raw.get("active_campaigns_count") or 0),
+                        "campaigns": campaigns,
+                        "complete": raw.get("status") != "PARTIAL_DATA",
+                        "warnings": [raw.get("warning_text")] if raw.get("warning_text") else [],
+                        "factual_drr": spend / revenue * 100 if revenue > 0.000001 else None,
+                        "ctr": clicks / impressions * 100 if impressions > 0.000001 else None,
+                        "cpc": spend / clicks if clicks > 0.000001 else None,
+                        "cpo": spend / orders if orders > 0.000001 else None,
+                    }
+                warnings = sync.get("warnings_json") or []
+                if isinstance(warnings, str):
+                    warnings = json.loads(warnings)
+                return {
+                    "by_nm": by_nm,
+                    "status": sync.get("status") or "OK",
+                    "warnings": warnings,
+                    "fetched_at": sync.get("fetched_at"),
+                    "from_cache": True,
+                }
+    except Exception:
+        logger.exception("Не удалось прочитать кэш рекламной статистики")
+        return None
+
+
+def _write_ad_stats_cache(date_from: date, date_to: date, result: dict[str, Any]) -> None:
+    if not database_enabled() or result.get("status") == "API_ERROR":
+        return
+    try:
+        _ensure_ad_cache_tables()
+        fetched_at = result.get("fetched_at") or datetime.now()
+        with _scenario_connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM sku_ad_stats_cache WHERE date_from = %s AND date_to = %s", (date_from, date_to))
+                for nm_id, row in (result.get("by_nm") or {}).items():
+                    cursor.execute(
+                        """
+                        INSERT INTO sku_ad_stats_cache (
+                            nm_id, sku, date_from, date_to, ad_spend, ad_revenue, ad_orders,
+                            impressions, clicks, campaigns_count, active_campaigns_count,
+                            status, warning_text, campaigns_json, fetched_at
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)
+                        """,
+                        (
+                            int(nm_id), str(row.get("sku") or ""), date_from, date_to,
+                            float(row.get("spend") or 0), float(row.get("revenue") or 0), float(row.get("orders") or 0),
+                            float(row.get("impressions") or 0), float(row.get("clicks") or 0),
+                            int(row.get("campaigns_count") or len(row.get("campaigns") or [])),
+                            int(row.get("active_campaigns_count") or 0),
+                            "OK" if row.get("complete", True) else "PARTIAL_DATA",
+                            " ".join(row.get("warnings") or []),
+                            json.dumps(row.get("campaigns") or [], ensure_ascii=False), fetched_at,
+                        ),
                     )
-    return by_nm
+                cursor.execute(
+                    """
+                    INSERT INTO ad_stats_sync_runs (date_from, date_to, status, warnings_json, fetched_at)
+                    VALUES (%s, %s, %s, %s::jsonb, %s)
+                    ON CONFLICT (date_from, date_to) DO UPDATE SET
+                        status = EXCLUDED.status,
+                        warnings_json = EXCLUDED.warnings_json,
+                        fetched_at = EXCLUDED.fetched_at,
+                        updated_at = NOW()
+                    """,
+                    (date_from, date_to, result.get("status") or "OK", json.dumps(result.get("warnings") or [], ensure_ascii=False), fetched_at),
+                )
+    except Exception:
+        logger.exception("Не удалось сохранить кэш рекламной статистики")
+
+
+def _load_ad_stats_detailed(date_from: date, date_to: date, *, force: bool = False) -> dict[str, Any]:
+    cached = _read_ad_stats_cache(date_from, date_to)
+    now = datetime.now(cached["fetched_at"].tzinfo) if cached and cached.get("fetched_at") else datetime.now()
+    if cached and not force and now - cached["fetched_at"] <= AD_CACHE_TTL:
+        return cached
+    result = fetch_advertising_stats(_wb_request_json, date_from, date_to, pause_seconds=20.1)
+    if result.get("status") == "API_ERROR" and cached:
+        cached["warnings"] = [
+            f"Используются кэшированные данные от {_date_time_display(cached.get('fetched_at'))}: обновление WB завершилось ошибкой."
+        ] + list(result.get("warnings") or [])
+        cached["stale_cache"] = True
+        return cached
+    _write_ad_stats_cache(date_from, date_to, result)
+    result["from_cache"] = False
+    return result
 
 
 def _load_ad_stats(date_from: date, date_to: date) -> tuple[dict[int, dict[str, Any]], list[str]]:
-    warnings: list[str] = []
-    max_days = 31
-    if (date_to - date_from).days + 1 > max_days:
-        warnings.append("Рекламная статистика WB запрошена только за первые 31 день периода: ограничение метода /adv/v3/fullstats.")
-        date_to = date_from + timedelta(days=max_days - 1)
-    try:
-        count = _wb_request_json("GET", "https://advert-api.wildberries.ru/adv/v1/promotion/count")
-        ids = _extract_campaign_ids(count)
-    except Exception as exc:
-        return {}, [f"Не удалось получить список рекламных кампаний WB: {exc}"]
-    if not ids:
-        return {}, []
-    if len(ids) > 50:
-        warnings.append(f"Найдено {len(ids)} рекламных кампаний, загружаем первые 50: лимит метода fullstats.")
-        ids = ids[:50]
-    try:
-        stats = _wb_request_json(
-            "GET",
-            "https://advert-api.wildberries.ru/adv/v3/fullstats",
-            params={"ids": ",".join(str(x) for x in ids), "beginDate": date_from.isoformat(), "endDate": date_to.isoformat()},
-            timeout=100,
-        )
-        return _flatten_ad_stats(stats), warnings
-    except Exception as exc:
-        warnings.append(f"Не удалось получить рекламную статистику WB: {exc}")
-        return {}, warnings
+    """Compatibility wrapper used by the existing Funnel/Ads route."""
+    result = _load_ad_stats_detailed(date_from, date_to)
+    legacy: dict[int, dict[str, Any]] = {}
+    for nm_id, row in (result.get("by_nm") or {}).items():
+        legacy[int(nm_id)] = {
+            **row,
+            "views": float(row.get("impressions") or 0),
+            "sum": float(row.get("spend") or 0),
+            "sum_price": float(row.get("revenue") or 0),
+        }
+    return legacy, list(result.get("warnings") or [])
 
 
 def _funnel_product_row(item: dict[str, Any], ad_row: dict[str, Any] | None, actual_by_nm: dict[int, dict[str, float]], *, drop_threshold: float) -> SimpleNamespace:
@@ -2913,7 +3079,7 @@ def _funnel_product_row(item: dict[str, Any], ad_row: dict[str, Any] | None, act
         ad_sum=ad_sum,
         fact_revenue=float(actual.get("revenue") or 0),
         fact_profit=float(actual.get("profit") or 0),
-        fact_drr=_div(ad_sum, float(actual.get("revenue") or 0)),
+        fact_drr=_div(ad_sum, float(ad.get("sum_price") or 0)),
         status=status,
         status_level=status_level,
     )
@@ -3842,6 +4008,8 @@ def _apply_meta_to_matrix_rows(rows: list[SimpleNamespace]) -> str:
         if not meta:
             continue
         row.nm_id = meta.get("nm_id") or row.nm_id
+        if row.nm_id and int(row.nm_id) not in getattr(row, "nm_ids", []):
+            row.nm_ids = [int(row.nm_id)]
         row.name = meta.get("name") or row.name
         row.category = meta.get("category") or row.category
         row.brand = meta.get("brand") or row.brand
@@ -3851,11 +4019,117 @@ def _apply_meta_to_matrix_rows(rows: list[SimpleNamespace]) -> str:
         try:
             data = json.loads(row.json.replace("&#39;", "'"))
             data["nmId"] = int(row.nm_id or 0)
+            data["nmIds"] = list(getattr(row, "nm_ids", []) or ([int(row.nm_id)] if row.nm_id else []))
             data["sku"] = row.sku
             row.json = json.dumps(data, ensure_ascii=False).replace("'", "&#39;")
         except Exception:
             pass
     return warning
+
+
+def _merge_explicit_nm_ad_rows(items: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not items:
+        return None
+    merged: dict[str, Any] = {
+        "nm_id": 0,
+        "name": "",
+        "spend": 0.0,
+        "revenue": 0.0,
+        "orders": 0.0,
+        "impressions": 0.0,
+        "clicks": 0.0,
+        "atbs": 0.0,
+        "shks": 0.0,
+        "complete": True,
+        "warnings": [],
+    }
+    campaigns: dict[int, dict[str, Any]] = {}
+    for item in items:
+        for key in ("spend", "revenue", "orders", "impressions", "clicks", "atbs", "shks"):
+            merged[key] += float(item.get(key) or 0)
+        merged["complete"] = bool(merged["complete"] and item.get("complete", True))
+        merged["warnings"].extend(item.get("warnings") or [])
+        for raw_campaign in item.get("campaigns") or []:
+            campaign_id = int(raw_campaign.get("campaign_id") or 0)
+            if campaign_id not in campaigns:
+                campaigns[campaign_id] = dict(raw_campaign)
+                continue
+            campaign = campaigns[campaign_id]
+            for key in ("spend", "revenue", "orders", "impressions", "clicks", "atbs", "shks"):
+                campaign[key] = float(campaign.get(key) or 0) + float(raw_campaign.get(key) or 0)
+            dates = [value for value in (campaign.get("period_from"), raw_campaign.get("period_from")) if value]
+            campaign["period_from"] = min(dates) if dates else ""
+            dates = [value for value in (campaign.get("period_to"), raw_campaign.get("period_to")) if value]
+            campaign["period_to"] = max(dates) if dates else ""
+    for campaign in campaigns.values():
+        spend = float(campaign.get("spend") or 0)
+        revenue = float(campaign.get("revenue") or 0)
+        clicks = float(campaign.get("clicks") or 0)
+        impressions = float(campaign.get("impressions") or 0)
+        orders = float(campaign.get("orders") or 0)
+        campaign["factual_drr"] = spend / revenue * 100 if revenue > 0.000001 else None
+        campaign["ctr"] = clicks / impressions * 100 if impressions > 0.000001 else None
+        campaign["cpc"] = spend / clicks if clicks > 0.000001 else None
+        campaign["cpo"] = spend / orders if orders > 0.000001 else None
+    merged["campaigns"] = sorted(campaigns.values(), key=lambda item: int(item.get("campaign_id") or 0))
+    merged["campaigns_count"] = len(merged["campaigns"])
+    merged["active_campaigns_count"] = sum(1 for item in merged["campaigns"] if item.get("status") == 9)
+    merged["warnings"] = list(dict.fromkeys(merged["warnings"]))
+    return merged
+
+
+def _attach_ad_stats_to_matrix_rows(
+    rows: list[SimpleNamespace],
+    ad_result: dict[str, Any],
+    *,
+    date_from: date,
+    date_to: date,
+) -> None:
+    by_nm = ad_result.get("by_nm") or {}
+    by_name: dict[str, list[dict[str, Any]]] = {}
+    for item in by_nm.values():
+        key = _norm_key(str(item.get("name") or ""))
+        if key:
+            by_name.setdefault(key, []).append(item)
+    for row in rows:
+        try:
+            nm_id = int(getattr(row, "nm_id", 0) or 0)
+        except (TypeError, ValueError):
+            nm_id = 0
+        explicit_nm_ids = [int(value) for value in (getattr(row, "nm_ids", None) or []) if value]
+        if nm_id and nm_id not in explicit_nm_ids:
+            explicit_nm_ids.insert(0, nm_id)
+        exact_items = [by_nm[value] for value in explicit_nm_ids if value in by_nm]
+        source = _merge_explicit_nm_ad_rows(exact_items) if len(explicit_nm_ids) > 1 else (exact_items[0] if exact_items else None)
+        exact_nm_match = bool(source and explicit_nm_ids)
+        if not source:
+            name_matches = by_name.get(_norm_key(str(getattr(row, "name", "") or "")), [])
+            if len(name_matches) == 1:
+                source = name_matches[0]
+                exact_nm_match = False
+        ad = classify_sku_advertising(
+            source,
+            fetch_status=str(ad_result.get("status") or "OK"),
+            exact_nm_match=exact_nm_match if source else bool(nm_id),
+        )
+        if source:
+            source["sku"] = str(getattr(row, "sku", "") or "")
+            for exact_item in exact_items:
+                exact_item["sku"] = source["sku"]
+        ad["period_from"] = date_from.isoformat()
+        ad["period_to"] = date_to.isoformat()
+        ad["fetched_at"] = _date_time_display(ad_result.get("fetched_at"))
+        ad["from_cache"] = bool(ad_result.get("from_cache"))
+        ad["stale_cache"] = bool(ad_result.get("stale_cache"))
+        row.ad = DotDict(ad)
+        try:
+            data = json.loads(row.json.replace("&#39;", "'"))
+            data["ad"] = ad
+            row.json = json.dumps(data, ensure_ascii=False).replace("'", "&#39;")
+        except Exception:
+            logger.exception("Не удалось добавить рекламные данные в строку SKU %s", getattr(row, "sku", ""))
+    if not ad_result.get("from_cache"):
+        _write_ad_stats_cache(date_from, date_to, ad_result)
 
 
 def _ensure_unit_matrix_scenario_table() -> None:
@@ -3936,8 +4210,8 @@ def unit_matrix():
     selected_type = request.args.get("period_type", "actual").strip()
     if selected_type not in {"actual", "weekly", "daily", "xlsx"}:
         selected_type = "actual"
-    date_from = _query_date("date_from")
     date_to = _query_date("date_to") or date.today()
+    date_from = _query_date("date_from") or (date_to - timedelta(days=30))
     if date_from and date_to and date_from > date_to:
         date_from, date_to = date_to, date_from
     query = request.args.get("q", "").strip()[:120]
@@ -3984,6 +4258,11 @@ def unit_matrix():
         matrix_rows.append(_unit_matrix_row_from_summary(row, d))
     matrix_rows.sort(key=lambda r: (r.name or r.sku).casefold())
     meta_warning = _apply_meta_to_matrix_rows(matrix_rows)
+    ad_result = _load_ad_stats_detailed(date_from, date_to, force=request.args.get("refresh_ads") == "1")
+    _attach_ad_stats_to_matrix_rows(matrix_rows, ad_result, date_from=date_from, date_to=date_to)
+    ad_warnings = list(ad_result.get("warnings") or [])
+    if date_to == date.today():
+        ad_warnings.append("Данные за текущий день могут быть неполными.")
 
     tariff_date = (date_to or date.today()).isoformat()
     fbs_warehouses, fbs_map, fbs_warning = _load_box_tariff_map(tariff_date, "fbs")
@@ -4004,7 +4283,12 @@ def unit_matrix():
         target_margin=target_margin,
         warehouse_options=warehouse_options,
         tariff_maps=tariff_maps,
+        tariff_date=tariff_date,
         tariff_warning=tariff_warning,
+        ad_warnings=list(dict.fromkeys(ad_warnings)),
+        ad_sync_at=_date_time_display(ad_result.get("fetched_at")),
+        ad_from_cache=bool(ad_result.get("from_cache")),
+        ad_period=f"{date_from.strftime('%d.%m.%Y')}–{date_to.strftime('%d.%m.%Y')}",
         categories=categories,
         brands=brands,
         period_label=period_label,
