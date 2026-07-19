@@ -26,7 +26,7 @@ from wb_api_profit import analyze_api_report, apply_advertising
 from wb_acceptance import (
     AcceptanceSettings,
     build_acceptance_messages,
-    fetch_acceptance_slots,
+    fetch_acceptance_snapshot,
     select_new_or_better_slots,
 )
 from wb_db import database_enabled, database_status, init_database, list_history, save_report
@@ -298,8 +298,8 @@ async def _load_acceptance_slots():
     token = os.getenv("WB_API_TOKEN", "").strip()
     settings = AcceptanceSettings.from_env()
     async with _acceptance_request_lock:
-        slots = await fetch_acceptance_slots(token, settings)
-    return settings, slots
+        snapshot = await fetch_acceptance_snapshot(token, settings)
+    return settings, snapshot
 
 
 async def acceptance_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -311,11 +311,31 @@ async def acceptance_status(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     status = await message.reply_text("🔎 Проверяю доступную приёмку на складах WB…")
     try:
-        settings, slots = await _load_acceptance_slots()
+        settings, snapshot = await _load_acceptance_slots()
+        slots = snapshot.available_slots
         if not slots:
-            await status.edit_text(
-                "Пока подходящей приёмки нет. Автоматический мониторинг продолжает работать ✅"
-            )
+            lines = [
+                "🥫 Приёмка WB · ЦФО · Питание",
+                "",
+                f"❌ Свободных дат на ближайшие {settings.days_ahead} дней сейчас нет.",
+            ]
+            if snapshot.monitored_warehouses:
+                lines.extend(
+                    [
+                        "",
+                        "Отслеживаю:",
+                        *(f"• {name} — мест нет" for name in snapshot.monitored_warehouses),
+                    ]
+                )
+            if snapshot.barcode_filter_enabled:
+                lines.extend(
+                    [
+                        "",
+                        f"✅ Проверка выполнена по {len(settings.barcodes)} баркодам.",
+                    ]
+                )
+            lines.extend(["", "Автоматический мониторинг продолжает работать ✅"])
+            await status.edit_text("\n".join(lines))
             return
         messages = build_acceptance_messages(
             slots,
@@ -325,6 +345,13 @@ async def acceptance_status(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await status.edit_text(messages[0])
         for text in messages[1:]:
             await message.reply_text(text)
+        if snapshot.unavailable_warehouses:
+            await message.reply_text(
+                "⛔ Пищевые склады без свободных дат сейчас:\n"
+                + "\n".join(
+                    f"• {name}" for name in snapshot.unavailable_warehouses
+                )
+            )
     except WbApiError as exc:
         await status.edit_text(f"❌ Не удалось проверить приёмку WB.\n\n{exc}")
     except Exception as exc:
@@ -346,14 +373,22 @@ async def acceptance_settings_command(
         return
     settings = AcceptanceSettings.from_env()
     warehouses = ", ".join(settings.warehouse_names) or "все склады"
+    required_names = ", ".join(settings.required_warehouse_names) or "нет"
     warehouse_ids = ", ".join(map(str, settings.warehouse_ids)) or "не заданы"
     box_types = ", ".join(map(str, settings.box_type_ids)) or "все"
+    barcode_status = (
+        f"включена, баркодов: {len(settings.barcodes)}"
+        if settings.barcodes
+        else "не задана"
+    )
     monitor_status = "включён" if auto_acceptance_monitor_enabled() else "выключен"
     await message.reply_text(
         "⚙️ Настройки мониторинга приёмки WB\n\n"
         f"Автоматика: {monitor_status}\n"
-        f"Склады: {warehouses}\n"
+        f"Города ЦФО: {warehouses}\n"
+        f"Обязательное слово в складе: {required_names}\n"
         f"Точные ID складов: {warehouse_ids}\n"
+        f"Проверка по баркодам: {barcode_status}\n"
         f"Типы поставки (ID): {box_types}\n"
         f"Максимальный коэффициент: {settings.max_coefficient}\n"
         f"Горизонт: {settings.days_ahead} дней\n"
@@ -369,7 +404,8 @@ async def acceptance_test(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.effective_message.reply_text(
             "🚨 Тест: уведомления о приёмке работают!\n\n"
             "Когда WB откроет подходящую дату, здесь появятся склад, "
-            "тип поставки, коэффициент и доступные даты."
+            "тип поставки, коэффициент и доступные даты. Обычные склады "
+            "без пометки «Питание» будут исключены."
         )
 
 
@@ -1577,7 +1613,8 @@ async def scheduled_acceptance_monitor(context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     try:
-        settings, slots = await _load_acceptance_slots()
+        settings, snapshot = await _load_acceptance_slots()
+        slots = snapshot.available_slots
         previous = context.application.bot_data.get(ACCEPTANCE_STATE_KEY, {})
         changed, current = select_new_or_better_slots(slots, previous)
         context.application.bot_data[ACCEPTANCE_STATE_KEY] = current

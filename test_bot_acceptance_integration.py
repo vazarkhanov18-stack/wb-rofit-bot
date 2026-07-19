@@ -7,7 +7,7 @@ from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 import bot
-from wb_acceptance import AcceptanceSettings, AcceptanceSlot
+from wb_acceptance import AcceptanceSettings, AcceptanceSlot, AcceptanceSnapshot
 
 
 class FakeTelegramBot:
@@ -40,7 +40,12 @@ class AcceptanceBotIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
 
         async def load_slots():
-            return settings, [slot]
+            return settings, AcceptanceSnapshot(
+                available_slots=(slot,),
+                monitored_warehouses=(slot.warehouse_name,),
+                compatible_warehouse_ids=(),
+                barcode_filter_enabled=False,
+            )
 
         fake_bot = FakeTelegramBot()
         context = SimpleNamespace(
@@ -85,4 +90,3 @@ class AcceptanceBotIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
