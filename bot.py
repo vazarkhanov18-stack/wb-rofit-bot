@@ -314,8 +314,9 @@ async def acceptance_status(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         settings, snapshot = await _load_acceptance_slots()
         slots = snapshot.available_slots
         if not slots:
+            geography_title = "вся Россия" if settings.all_regions else "выбранные города"
             lines = [
-                "🥫 Приёмка WB · ЦФО · Питание",
+                f"🥫 Приёмка WB · {geography_title} · Питание",
                 "",
                 f"❌ Свободных дат на ближайшие {settings.days_ahead} дней сейчас нет.",
             ]
@@ -376,6 +377,7 @@ async def acceptance_settings_command(
     required_names = ", ".join(settings.required_warehouse_names) or "нет"
     warehouse_ids = ", ".join(map(str, settings.warehouse_ids)) or "не заданы"
     box_types = ", ".join(map(str, settings.box_type_ids)) or "все"
+    geography = "все регионы РФ" if settings.all_regions else warehouses
     barcode_status = (
         f"включена, баркодов: {len(settings.barcodes)}"
         if settings.barcodes
@@ -385,7 +387,7 @@ async def acceptance_settings_command(
     await message.reply_text(
         "⚙️ Настройки мониторинга приёмки WB\n\n"
         f"Автоматика: {monitor_status}\n"
-        f"Города ЦФО: {warehouses}\n"
+        f"География: {geography}\n"
         f"Обязательное слово в складе: {required_names}\n"
         f"Точные ID складов: {warehouse_ids}\n"
         f"Проверка по баркодам: {barcode_status}\n"

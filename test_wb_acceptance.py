@@ -144,6 +144,20 @@ class AcceptanceMonitorTests(unittest.TestCase):
             settings = AcceptanceSettings.from_env()
         self.assertEqual(settings.required_warehouse_names, ("Питание",))
         self.assertEqual(settings.barcodes, ())
+        self.assertTrue(settings.all_regions)
+
+    def test_all_regions_mode_ignores_city_name_filter(self):
+        settings = replace(
+            self.settings,
+            required_warehouse_names=("Питание",),
+            all_regions=True,
+        )
+        result = filter_acceptance_slots(
+            [self.row(warehouseName="Краснодар Питание", warehouseID=300)],
+            settings,
+            today=date(2026, 7, 19),
+        )
+        self.assertEqual([slot.warehouse_name for slot in result], ["Краснодар Питание"])
 
 
 class AcceptanceOptionsTests(unittest.IsolatedAsyncioTestCase):

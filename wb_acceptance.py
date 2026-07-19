@@ -99,6 +99,13 @@ def _bounded_int(
         return default
 
 
+def _env_flag(name: str, *, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "y", "on", "да"}
+
+
 @dataclass(frozen=True)
 class AcceptanceSettings:
     warehouse_names: tuple[str, ...]
@@ -110,6 +117,7 @@ class AcceptanceSettings:
     timezone: ZoneInfo
     required_warehouse_names: tuple[str, ...] = ()
     barcodes: tuple[str, ...] = ()
+    all_regions: bool = False
 
     @classmethod
     def from_env(cls) -> "AcceptanceSettings":
@@ -157,6 +165,7 @@ class AcceptanceSettings:
                 ("Питание",),
             ),
             barcodes=_csv_strings(os.getenv("ACCEPTANCE_BARCODES")),
+            all_regions=_env_flag("ACCEPTANCE_ALL_REGIONS", default=True),
         )
 
 
@@ -232,7 +241,11 @@ def _matches_warehouse(
 
     if settings.warehouse_ids and slot.warehouse_id not in settings.warehouse_ids:
         return False
-    if name_filters and not any(fragment in warehouse_name for fragment in name_filters):
+    if (
+        not settings.all_regions
+        and name_filters
+        and not any(fragment in warehouse_name for fragment in name_filters)
+    ):
         return False
     if required_filters and not any(
         fragment in warehouse_name for fragment in required_filters
