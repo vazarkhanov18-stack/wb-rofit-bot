@@ -23,6 +23,12 @@ from wb_api import (
     get_wb_warehouse_stocks,
 )
 from wb_api_profit import analyze_api_report, apply_advertising
+from wb_acceptance import (
+    AcceptanceSettings,
+    build_acceptance_messages,
+    fetch_acceptance_slots,
+    select_new_or_better_slots,
+)
 from wb_db import database_enabled, database_status, init_database, list_history, save_report
 from wb_management import init_management_store, seed_management_from_excel
 from dashboard import start_dashboard_server
@@ -51,6 +57,10 @@ logger = logging.getLogger("wb-profit-bot")
 FINANCE_MIN_INTERVAL_SECONDS = 62.0
 _finance_request_lock = asyncio.Lock()
 _last_finance_request_at = 0.0
+
+_acceptance_request_lock = asyncio.Lock()
+ACCEPTANCE_STATE_KEY = "acceptance_monitor_available"
+ACCEPTANCE_LAST_ERROR_KEY = "acceptance_monitor_last_error"
 
 BACKFILL_EARLIEST_DATE = date(2024, 1, 29)
 _backfill_task: asyncio.Task[None] | None = None
@@ -99,6 +109,10 @@ def auto_weekly_enabled() -> bool:
 
 def auto_stock_alert_enabled() -> bool:
     return env_flag("AUTO_STOCK_ALERT")
+
+
+def auto_acceptance_monitor_enabled() -> bool:
+    return env_flag("AUTO_ACCEPTANCE_MONITOR", default=True)
 
 
 def configured_timezone() -> ZoneInfo:
@@ -230,6 +244,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/stocks — текущие остатки FBW и FBS.\n"
         "/supply — прогноз, на сколько дней хватит товара и сколько поставить.\n"
         "/stockalerts — проверить товары с низким остатком.\n"
+        "/acceptance — проверить доступную приёмку на складах WB.\n"
+        "/acceptancesettings — настройки мониторинга приёмки.\n"
+        "/acceptancetest — проверить Telegram-уведомление.\n"
         "/history — последние сохранённые финансовые периоды.\n"
         "/dbstatus — проверить базу данных.\n"
         "/schedule — статус автоматических отчётов.\n"
@@ -274,6 +291,85 @@ async def wb_balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await status.edit_text(
             "❌ Возникла непредвиденная ошибка при проверке WB API.\n"
             f"Техническая ошибка: {type(exc).__name__}: {exc}"
+        )
+
+
+async def _load_acceptance_slots():
+    token = os.getenv("WB_API_TOKEN", "").strip()
+    settings = AcceptanceSettings.from_env()
+    async with _acceptance_request_lock:
+        slots = await fetch_acceptance_slots(token, settings)
+    return settings, slots
+
+
+async def acceptance_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await reject_if_not_allowed(update):
+        return
+    message = update.effective_message
+    if not message:
+        return
+
+    status = await message.reply_text("🔎 Проверяю доступную приёмку на складах WB…")
+    try:
+        settings, slots = await _load_acceptance_slots()
+        if not slots:
+            await status.edit_text(
+                "Пока подходящей приёмки нет. Автоматический мониторинг продолжает работать ✅"
+            )
+            return
+        messages = build_acceptance_messages(
+            slots,
+            title="✅ Доступная приёмка WB сейчас",
+            timezone=settings.timezone,
+        )
+        await status.edit_text(messages[0])
+        for text in messages[1:]:
+            await message.reply_text(text)
+    except WbApiError as exc:
+        await status.edit_text(f"❌ Не удалось проверить приёмку WB.\n\n{exc}")
+    except Exception as exc:
+        logger.exception("Ошибка ручной проверки приёмки WB")
+        await status.edit_text(
+            "❌ Возникла непредвиденная ошибка при проверке приёмки WB.\n"
+            f"Техническая ошибка: {type(exc).__name__}: {exc}"
+        )
+
+
+async def acceptance_settings_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    if await reject_if_not_allowed(update):
+        return
+    message = update.effective_message
+    if not message:
+        return
+    settings = AcceptanceSettings.from_env()
+    warehouses = ", ".join(settings.warehouse_names) or "все склады"
+    warehouse_ids = ", ".join(map(str, settings.warehouse_ids)) or "не заданы"
+    box_types = ", ".join(map(str, settings.box_type_ids)) or "все"
+    monitor_status = "включён" if auto_acceptance_monitor_enabled() else "выключен"
+    await message.reply_text(
+        "⚙️ Настройки мониторинга приёмки WB\n\n"
+        f"Автоматика: {monitor_status}\n"
+        f"Склады: {warehouses}\n"
+        f"Точные ID складов: {warehouse_ids}\n"
+        f"Типы поставки (ID): {box_types}\n"
+        f"Максимальный коэффициент: {settings.max_coefficient}\n"
+        f"Горизонт: {settings.days_ahead} дней\n"
+        f"Проверка: каждые {settings.check_interval_seconds} сек.\n\n"
+        "Меняется через Railway Variables с префиксом ACCEPTANCE_."
+    )
+
+
+async def acceptance_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await reject_if_not_allowed(update):
+        return
+    if update.effective_message:
+        await update.effective_message.reply_text(
+            "🚨 Тест: уведомления о приёмке работают!\n\n"
+            "Когда WB откроет подходящую дату, здесь появятся склад, "
+            "тип поставки, коэффициент и доступные даты."
         )
 
 
@@ -1406,11 +1502,20 @@ async def schedule_status(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if auto_stock_alert_enabled()
         else "⏸ Остатки: автоматические предупреждения выключены"
     )
+    acceptance_settings = AcceptanceSettings.from_env()
+    acceptance_status_text = (
+        "✅ Приёмка WB: каждые "
+        f"{acceptance_settings.check_interval_seconds} сек."
+        if auto_acceptance_monitor_enabled()
+        else "⏸ Приёмка WB: мониторинг выключен"
+    )
     await message.reply_text(
-        f"{daily_status}\n{weekly_status}\n{stock_status}\nЧасовой пояс: {timezone.key}\n\n"
+        f"{daily_status}\n{weekly_status}\n{stock_status}\n{acceptance_status_text}\n"
+        f"Часовой пояс: {timezone.key}\n\n"
         "Настройки Railway Variables:\n"
         "AUTO_DAILY_REPORT, DAILY_REPORT_TIME, AUTO_WEEKLY_REPORT, WEEKLY_REPORT_TIME, "
-        "AUTO_STOCK_ALERT, STOCK_ALERT_TIME, REPORT_TIMEZONE."
+        "AUTO_STOCK_ALERT, STOCK_ALERT_TIME, AUTO_ACCEPTANCE_MONITOR, "
+        "ACCEPTANCE_CHECK_INTERVAL_SECONDS, REPORT_TIMEZONE."
     )
 
 
@@ -1463,6 +1568,49 @@ async def scheduled_stock_alert(context: ContextTypes.DEFAULT_TYPE) -> None:
             logger.info("Автоматический контроль остатков: критичных позиций нет.")
     except Exception:
         logger.exception("Ошибка автоматического контроля остатков")
+
+
+async def scheduled_acceptance_monitor(context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = context.job.chat_id if context.job else allowed_user_id()
+    if not chat_id:
+        logger.error("Мониторинг приёмки пропущен: не задан ALLOWED_USER_ID.")
+        return
+
+    try:
+        settings, slots = await _load_acceptance_slots()
+        previous = context.application.bot_data.get(ACCEPTANCE_STATE_KEY, {})
+        changed, current = select_new_or_better_slots(slots, previous)
+        context.application.bot_data[ACCEPTANCE_STATE_KEY] = current
+        if not changed:
+            logger.info(
+                "Мониторинг приёмки: доступных новых дат нет; всего подходящих=%d.",
+                len(slots),
+            )
+            return
+
+        messages = build_acceptance_messages(
+            changed,
+            title="🚨 Появилась приёмка WB",
+            timezone=settings.timezone,
+        )
+        for text in messages:
+            await context.bot.send_message(int(chat_id), text)
+        logger.info("Отправлено уведомление о %d новых датах приёмки.", len(changed))
+    except Exception as exc:
+        logger.exception("Ошибка автоматического мониторинга приёмки WB")
+        now = datetime.now(configured_timezone())
+        last_error = context.application.bot_data.get(ACCEPTANCE_LAST_ERROR_KEY)
+        if isinstance(last_error, datetime) and now - last_error < timedelta(hours=1):
+            return
+        context.application.bot_data[ACCEPTANCE_LAST_ERROR_KEY] = now
+        try:
+            await context.bot.send_message(
+                int(chat_id),
+                "⚠️ Мониторинг приёмки WB временно не смог выполнить проверку.\n\n"
+                f"{exc}\n\nСледующая попытка будет автоматически.",
+            )
+        except Exception:
+            logger.exception("Не удалось отправить ошибку мониторинга приёмки в Telegram")
 
 
 async def initialize_application(application: Application) -> None:
@@ -1578,6 +1726,28 @@ async def configure_jobs(application: Application) -> None:
     else:
         logger.info("Автоматический контроль остатков выключен.")
 
+    if auto_acceptance_monitor_enabled():
+        settings = AcceptanceSettings.from_env()
+        job_queue.run_repeating(
+            scheduled_acceptance_monitor,
+            interval=settings.check_interval_seconds,
+            first=15,
+            chat_id=chat_id,
+            user_id=chat_id,
+            name="wb-acceptance-monitor",
+            job_kwargs={
+                "coalesce": True,
+                "max_instances": 1,
+                "misfire_grace_time": settings.check_interval_seconds,
+            },
+        )
+        logger.info(
+            "Мониторинг приёмки WB запущен с интервалом %d сек.",
+            settings.check_interval_seconds,
+        )
+    else:
+        logger.info("Автоматический мониторинг приёмки WB выключен.")
+
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await reject_if_not_allowed(update):
@@ -1630,7 +1800,8 @@ async def unknown_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if update.effective_message:
         await update.effective_message.reply_text(
             "Используй /yesterday, /week, /compare, /month, /report, /backfill, /syncdaily, /backfilldaily, "
-            "/backfillstatus, /stocks, /supply, /stockalerts, /history, /dbstatus, "
+            "/backfillstatus, /stocks, /supply, /stockalerts, /acceptance, "
+            "/acceptancesettings, /acceptancetest, /history, /dbstatus, "
             "/schedule или пришли файл .xlsx."
         )
 
@@ -1658,13 +1829,16 @@ def main() -> None:
     app.add_handler(CommandHandler("stocks", stocks_report))
     app.add_handler(CommandHandler("supply", supply_forecast))
     app.add_handler(CommandHandler("stockalerts", stock_alerts))
+    app.add_handler(CommandHandler("acceptance", acceptance_status))
+    app.add_handler(CommandHandler("acceptancesettings", acceptance_settings_command))
+    app.add_handler(CommandHandler("acceptancetest", acceptance_test))
     app.add_handler(CommandHandler("history", report_history))
     app.add_handler(CommandHandler("dbstatus", db_status_command))
     app.add_handler(CommandHandler("schedule", schedule_status))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.ALL, unknown_message))
 
-    logger.info("WB Profit Bot v28 запущен")
+    logger.info("WB Profit Bot v29 запущен")
     app.run_polling(drop_pending_updates=True)
 
 
