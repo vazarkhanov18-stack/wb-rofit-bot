@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta
 import psycopg
 from psycopg.rows import dict_row
 
-from wb_profit import ReportResult
+from wb_profit import TAX_RATE, ReportResult
 
 
 @dataclass(frozen=True)
@@ -40,6 +40,32 @@ def _connect():
     if not url:
         raise RuntimeError("Не задана переменная DATABASE_URL.")
     return psycopg.connect(url, connect_timeout=12)
+
+
+def _recalculate_saved_tax(cursor) -> None:
+    """Применяет текущую ставку к истории, сохраняя выручку и прибыль до налога.
+
+    Выполняется в транзакции инициализации. Повторный запуск не меняет уже
+    пересчитанные строки и не требует повторного получения отчётов WB.
+    """
+    for table in ("report_snapshots", "sku_snapshots", "sale_operations"):
+        before_ads_sql = (
+            ", profit_before_ads = profit_before_tax + advertising - revenue * %(rate)s"
+            if table != "sale_operations" else ""
+        )
+        cursor.execute(
+            f"""
+            UPDATE {table}
+            SET tax = revenue * %(rate)s,
+                profit = profit_before_tax - revenue * %(rate)s,
+                margin = CASE WHEN revenue <> 0
+                              THEN (profit_before_tax - revenue * %(rate)s) / revenue
+                              ELSE 0 END
+                {before_ads_sql}
+            WHERE ABS(tax - revenue * %(rate)s) > 0.000000001
+            """,
+            {"rate": TAX_RATE},
+        )
 
 
 def init_database() -> None:
@@ -175,6 +201,8 @@ def init_database() -> None:
             cursor.execute(
                 "UPDATE sku_snapshots SET external_expenses = unit_expenses + general_expenses"
             )
+
+            _recalculate_saved_tax(cursor)
 
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_report_snapshots_period_end ON report_snapshots(period_end DESC)"

@@ -11,7 +11,7 @@ from openpyxl import load_workbook
 from openpyxl.utils.datetime import from_excel
 
 
-TAX_RATE = 0.06
+TAX_RATE = 0.01
 UNALLOCATED_SKU = "НЕРАСПРЕДЕЛЕНО"
 DEFAULT_EFFECTIVE_DATE = date(1900, 1, 1)
 
@@ -905,7 +905,7 @@ def build_messages(result: ReportResult) -> list[str]:
         f"Реклама WB: {format_money(result.total_advertising)}",
         f"ДРР: {result.drr * 100:.1f}%",
         f"Прибыль до налога: {format_money(result.total_profit_before_tax)}",
-        f"УСН 6%: {format_money(result.total_tax)}",
+        f"УСН {TAX_RATE:.0%}: {format_money(result.total_tax)}",
         "",
         f"💰 Чистая прибыль: {format_money(total_profit)}",
         f"Маржинальность: {result.margin * 100:.1f}%",
@@ -958,7 +958,7 @@ def build_messages(result: ReportResult) -> list[str]:
 
     notes = [
         "",
-        "Расчёт предварительный: учтены финансовый отчёт WB, история себестоимости, расходы на единицу, внешние расходы, УСН 6% и WB Продвижение. Точность зависит от заполнения файлов cost_history.xlsx и expenses.xlsx.",
+        f"Расчёт предварительный: учтены финансовый отчёт WB, история себестоимости, расходы на единицу, внешние расходы, УСН {TAX_RATE:.0%} и WB Продвижение. Точность зависит от заполнения файлов cost_history.xlsx и expenses.xlsx.",
     ]
 
     return ["\n".join(summary), "\n".join(detail + notes)]

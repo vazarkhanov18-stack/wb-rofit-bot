@@ -46,6 +46,7 @@ from wb_api import (
 )
 from wb_advertising import WBRateLimitError, classify_sku_advertising, fetch_advertising_stats
 from wb_unit_math import manual_warehouse_costs
+from wb_profit import TAX_RATE
 from wb_management import (
     delete_cost_profile,
     delete_expense,
@@ -88,7 +89,7 @@ DASHBOARD_TEMPLATE = r"""
 <nav class="nav"><a class="active" href="/">Дашборд</a><a href="/products">Товары</a><a href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-matrix">SKU-юнитка</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
 <form class="filters" method="get"><select name="period_type" aria-label="Тип периода"><option value="actual" {% if selected_type == 'actual' %}selected{% endif %}>Актуально без дублей</option><option value="" {% if selected_type == '' %}selected{% endif %}>Все сохранённые периоды</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Дневные и произвольные</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Недельные</option><option value="xlsx" {% if selected_type == 'xlsx' %}selected{% endif %}>Загруженные Excel</option></select><label>С даты <input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату <input type="date" name="date_to" value="{{ date_to_value }}"></label><select name="expense_base" aria-label="База процентов"><option value="revenue" {% if expense_base == 'revenue' %}selected{% endif %}>Расходы: % от выручки</option><option value="expenses" {% if expense_base == 'expenses' %}selected{% endif %}>Расходы: % от всех расходов</option></select><button type="submit">Показать</button><a class="button secondary" href="/?period_type=actual">С первой продажи по сейчас</a></form>{% if selected_type == 'actual' %}<div class="hint">Режим <b>«Актуально без дублей»</b>: закрытые недели берутся из недельных отчётов, а текущая незакрытая неделя — из ежедневных отчётов. Если не выбрать даты, дашборд показывает период от первой сохранённой продажи до текущего дня. Для свежих дней запусти в Telegram <b>/syncdaily</b>.</div>{% endif %}
 {% if latest %}<div class="grid">
-<div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(latest.revenue) }}</div></div><div class="card"><div class="label">Расчётная выплата</div><div class="value">{{ money(latest.payout) }}</div></div><div class="card"><div class="label">Прибыль до налога</div><div class="value {{ 'good' if latest.profit_before_tax >= 0 else 'bad' }}">{{ money(latest.profit_before_tax) }}</div></div><div class="card"><div class="label">УСН 6%</div><div class="value">{{ money(latest.tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if latest.profit >= 0 else 'bad' }}">{{ money(latest.profit) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(latest.cogs) }}</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(latest.external_expenses) }}</div></div><div class="card"><div class="label">Реклама WB</div><div class="value">{{ money(latest.advertising) }}</div></div><div class="card"><div class="label">ДРР / Маржа</div><div class="value {{ margin_class(latest.margin) }}">{{ percent(latest.drr) }} / {{ percent(latest.margin) }}</div></div><div class="card"><div class="label">Продано</div><div class="value">{{ units(latest.units) }} шт.</div></div></div>
+<div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(latest.revenue) }}</div></div><div class="card"><div class="label">Расчётная выплата</div><div class="value">{{ money(latest.payout) }}</div></div><div class="card"><div class="label">Прибыль до налога</div><div class="value {{ 'good' if latest.profit_before_tax >= 0 else 'bad' }}">{{ money(latest.profit_before_tax) }}</div></div><div class="card"><div class="label">УСН 1%</div><div class="value">{{ money(latest.tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if latest.profit >= 0 else 'bad' }}">{{ money(latest.profit) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(latest.cogs) }}</div></div><div class="card"><div class="label">Внешние расходы</div><div class="value">{{ money(latest.external_expenses) }}</div></div><div class="card"><div class="label">Реклама WB</div><div class="value">{{ money(latest.advertising) }}</div></div><div class="card"><div class="label">ДРР / Маржа</div><div class="value {{ margin_class(latest.margin) }}">{{ percent(latest.drr) }} / {{ percent(latest.margin) }}</div></div><div class="card"><div class="label">Продано</div><div class="value">{{ units(latest.units) }} шт.</div></div></div>
 
 <div class="section card"><div class="section-head"><div><h2>Структура расходов</h2><div class="subtitle">Сумма и доля каждой статьи расходов по выбранному периоду</div></div><span class="muted">База: {{ expense_structure.base_label }}</span></div>
 <div class="summary"><span>Выручка: {{ money(expense_structure.revenue) }}</span><span>Всего расходов в структуре: {{ money(expense_structure.total_expenses) }}</span><span>Комиссия WB не вычитается повторно: она уже сидит в сумме к перечислению.</span></div>
@@ -216,7 +217,7 @@ function calcScenarioValuesFromQuery(query){
     acceptance: n('acceptance',0),
     returnLogistics: n('return_logistics',0),
     drr: rate('drr_pct',0)*100,
-    taxPct: rate('tax_pct',0.06)*100,
+    taxPct: Math.max(0, Math.min(100, n('tax_pct',1))),
     other: other,
     desiredProfit: 150,
     extras: {
@@ -921,7 +922,7 @@ def _unit_economy_row(row, *, target_margin: float, scenario_drr: float) -> dict
     tax_per_unit = _div(row.tax, units)
     profit_per_unit = _div(profit, units)
     payout_rate = _div(payout, revenue)
-    tax_rate = _div(row.tax, revenue) or 0.06
+    tax_rate = _div(row.tax, revenue) or TAX_RATE
     max_drr_zero = _div(profit + advertising, revenue)
     max_drr_target = max_drr_zero - target_margin
     break_even_price = _target_price(cogs_per_unit + external_per_unit + ad_per_unit, payout_rate, tax_rate, 0)
@@ -1582,7 +1583,8 @@ def _unit_calculator_values(product_summary=None) -> DotDict:
         "storage_per_day": max(0.0, _query_float("storage_per_day", 0)),
         "acceptance": max(0.0, _query_float("acceptance", 0)),
         "vat_pct": _query_rate("vat_pct", 0, min_value=0, max_value=1),
-        "tax_pct": _query_rate("tax_pct", 0.06, min_value=0, max_value=1),
+        # Поле формы задано в процентах: значение «1» означает 1%, а не 100%.
+        "tax_pct": max(0.0, min(1.0, _query_float("tax_pct", TAX_RATE * 100) / 100)),
         "mp_delivery": max(0.0, _query_float("mp_delivery", 0)),
         "packaging_cost": max(0.0, _query_float("packaging_cost", 0)),
         "drr_pct": _query_rate("drr_pct", drr, min_value=0, max_value=1),
