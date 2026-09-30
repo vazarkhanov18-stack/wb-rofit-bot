@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import psycopg
 from psycopg.rows import dict_row
@@ -802,6 +802,9 @@ class SaleOperationRow:
 class SaleOperationSummary:
     operations: int
     quantity: float
+    sold_quantity: float
+    returned_quantity: float
+    net_quantity: float
     revenue: float
     payout: float
     wb_expenses: float
@@ -854,7 +857,7 @@ def _operations_where_sql(
 
 
 def list_sale_operations(
-    limit: int = 500,
+    limit: int | None = 500,
     *,
     period_type: str | None = "weekly",
     date_from: date | None = None,
@@ -864,7 +867,7 @@ def list_sale_operations(
     only_negative: bool = False,
     only_missing_cost: bool = False,
 ) -> list[SaleOperationRow]:
-    limit = max(1, min(int(limit), 5000))
+    normalized_limit = None if limit is None else max(1, min(int(limit), 5000))
     where_sql, params = _operations_where_sql(
         period_type=period_type,
         date_from=date_from,
@@ -874,7 +877,10 @@ def list_sale_operations(
         only_negative=only_negative,
         only_missing_cost=only_missing_cost,
     )
-    params.append(limit)
+    limit_sql = ""
+    if normalized_limit is not None:
+        params.append(normalized_limit)
+        limit_sql = "LIMIT %s"
     with _connect() as connection:
         with connection.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
@@ -892,7 +898,7 @@ def list_sale_operations(
                 JOIN report_snapshots r ON r.id = o.report_id
                 {where_sql}
                 ORDER BY COALESCE(o.operation_date, r.period_start) DESC, o.id DESC
-                LIMIT %s
+                {limit_sql}
                 """,
                 tuple(params),
             )
@@ -925,6 +931,10 @@ def sale_operations_summary(
                 SELECT
                     COUNT(*)::INTEGER AS operations,
                     COALESCE(SUM(o.quantity), 0) AS quantity,
+                    COALESCE(SUM(CASE WHEN o.operation_type = 'Продажа' AND o.quantity > 0 THEN o.quantity ELSE 0 END), 0) AS sold_quantity,
+                    COALESCE(SUM(CASE WHEN o.operation_type = 'Возврат' THEN ABS(o.quantity) ELSE 0 END), 0) AS returned_quantity,
+                    COALESCE(SUM(CASE WHEN o.operation_type = 'Продажа' AND o.quantity > 0 THEN o.quantity ELSE 0 END), 0)
+                      - COALESCE(SUM(CASE WHEN o.operation_type = 'Возврат' THEN ABS(o.quantity) ELSE 0 END), 0) AS net_quantity,
                     COALESCE(SUM(o.revenue), 0) AS revenue,
                     COALESCE(SUM(o.payout), 0) AS payout,
                     COALESCE(SUM(o.wb_expenses), 0) AS wb_expenses,
@@ -947,3 +957,94 @@ def sale_operations_summary(
             )
             row = cursor.fetchone() or {}
             return SaleOperationSummary(**dict(row))
+
+
+@dataclass(frozen=True)
+class SalesDataStatus:
+    last_weekly: date | None
+    last_daily: date | None
+    latest_operation: date | None
+
+    @property
+    def synchronized_through(self) -> date | None:
+        dates = [value for value in (self.last_weekly, self.last_daily) if value is not None]
+        return max(dates) if dates else None
+
+
+def get_sales_data_status() -> SalesDataStatus:
+    """Возвращает независимые границы weekly, daily и фактических операций."""
+    with _connect() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    MAX(period_end) FILTER (WHERE period_type = 'weekly') AS last_weekly,
+                    MAX(period_end) FILTER (WHERE period_type = 'daily') AS last_daily,
+                    (SELECT MAX(COALESCE(o.operation_date, r2.period_end))
+                       FROM sale_operations o
+                       JOIN report_snapshots r2 ON r2.id = o.report_id) AS latest_operation
+                FROM report_snapshots
+                """
+            )
+            row = cursor.fetchone()
+            return SalesDataStatus(
+                last_weekly=row[0] if row else None,
+                last_daily=row[1] if row else None,
+                latest_operation=row[2] if row else None,
+            )
+
+
+def missing_daily_ranges(date_from: date, date_to: date) -> list[tuple[date, date]]:
+    """Находит не покрытые сохранёнными daily-отчётами интервалы, включая внутренние пропуски."""
+    if date_to < date_from:
+        return []
+    with _connect() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT period_start, period_end
+                FROM report_snapshots
+                WHERE period_type = 'daily'
+                  AND period_end >= %s
+                  AND period_start <= %s
+                ORDER BY period_start, period_end
+                """,
+                (date_from, date_to),
+            )
+            periods = list(cursor.fetchall())
+
+    covered: set[date] = set()
+    for period_start, period_end in periods:
+        cursor_date = max(date_from, period_start)
+        covered_end = min(date_to, period_end)
+        while cursor_date <= covered_end:
+            covered.add(cursor_date)
+            cursor_date += timedelta(days=1)
+
+    ranges: list[tuple[date, date]] = []
+    cursor_date = date_from
+    while cursor_date <= date_to:
+        if cursor_date in covered:
+            cursor_date += timedelta(days=1)
+            continue
+        range_start = cursor_date
+        while cursor_date <= date_to and cursor_date not in covered:
+            cursor_date += timedelta(days=1)
+        ranges.append((range_start, cursor_date - timedelta(days=1)))
+    return ranges
+
+
+def report_operation_ids(period_start: date, period_end: date, period_type: str) -> set[str]:
+    """Возвращает ID строк точного отчёта для подсчёта вставок при идемпотентной синхронизации."""
+    with _connect() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT o.operation_id
+                FROM sale_operations o
+                JOIN report_snapshots r ON r.id = o.report_id
+                WHERE r.period_start = %s AND r.period_end = %s AND r.period_type = %s
+                """,
+                (period_start, period_end, period_type),
+            )
+            return {str(row[0]) for row in cursor.fetchall()}

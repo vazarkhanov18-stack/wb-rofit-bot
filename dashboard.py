@@ -16,6 +16,7 @@ from email.utils import parsedate_to_datetime
 from typing import Any
 from types import SimpleNamespace
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 from flask import Flask, Response, redirect, render_template_string, request, url_for
 from waitress import serve
@@ -33,7 +34,9 @@ from wb_db import (
     list_product_summaries,
     list_sale_operations,
     sale_operations_summary,
+    get_sales_data_status,
 )
+from wb_daily_sync import DailySyncAlreadyRunning, sync_daily_range
 from wb_api import (
     WbApiError,
     get_product_cards,
@@ -605,8 +608,13 @@ SALES_TEMPLATE = r"""
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>История продаж · WB Profit</title>""" + BASE_STYLE + r"""</head><body><div class="wrap">
 <header><div><h1>История продаж</h1><div class="subtitle">Построчная детализация: продажи, возвраты и отдельные расходы WB из финансового отчёта</div></div><div class="badge">{{ summary.operations }} операций</div></header>
 <nav class="nav"><a href="/">Дашборд</a><a href="/products">Товары</a><a class="active" href="/sales">История продаж</a><a href="/reconcile">Сверка</a><a href="/unit-economics">Юнит-экономика</a><a href="/unit-matrix">SKU-юнитка</a><a href="/unit-calculator">Калькулятор юнитки</a><a href="/supply-planner">Поставки</a><a href="/logistics">Логистика</a><a href="/ai-analyst">AI-аналитик</a><a href="/funnel-ads">Воронка/реклама</a><a href="/ai-chat">AI-чат</a><a href="/plan-fact">План-факт</a><a href="/admin">Себестоимость и расходы</a></nav>
-<form class="filters" method="get"><label>Тип данных <select name="period_type"><option value="actual" {% if selected_type == 'actual' %}selected{% endif %}>Актуально без дублей</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Только подтверждённые недели</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Только ежедневные/оперативные</option><option value="" {% if selected_type == '' %}selected{% endif %}>Все типы, могут быть дубли</option></select></label><label>С даты <input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату <input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Операция <select name="operation_type"><option value="" {% if not operation_type %}selected{% endif %}>Все</option><option value="Продажа" {% if operation_type == 'Продажа' %}selected{% endif %}>Продажи</option><option value="Возврат" {% if operation_type == 'Возврат' %}selected{% endif %}>Возвраты</option><option value="Расход WB" {% if operation_type == 'Расход WB' %}selected{% endif %}>Расходы WB</option></select></label><input name="q" value="{{ query }}" placeholder="Поиск: артикул, товар, nmID"><label><input type="checkbox" name="negative" value="1" {% if only_negative %}checked{% endif %}> только минус</label><label><input type="checkbox" name="missing_cost" value="1" {% if only_missing_cost %}checked{% endif %}> без себеса</label><button type="submit">Показать</button><a class="button secondary" href="{{ export_url }}">Экспорт CSV</a></form>{% if selected_type == 'actual' %}<div class="hint section">Режим <b>«Актуально без дублей»</b>: закрытые недели берутся из недельных отчётов, а текущая незакрытая неделя — из ежедневных отчётов после {{ date_display(actual_cutoff) if actual_cutoff else 'начала доступной истории' }}. Чтобы обновить текущие дни, запусти в Telegram <b>/syncdaily</b>.</div>{% endif %}
-{% if rows %}<div class="grid section"><div class="card"><div class="label">Операций</div><div class="value">{{ summary.operations }}</div></div><div class="card"><div class="label">Кол-во</div><div class="value">{{ units(summary.quantity) }} шт.</div></div><div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(summary.revenue) }}</div></div><div class="card"><div class="label">Расчётная выплата</div><div class="value">{{ money(summary.payout) }}</div></div><div class="card"><div class="label">WB удержания</div><div class="value">{{ money(summary.wb_expenses) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(summary.cogs) }}</div></div><div class="card"><div class="label">Реклама</div><div class="value">{{ money(summary.advertising) }}</div></div><div class="card"><div class="label">До налога</div><div class="value {{ 'good' if summary.profit_before_tax >= 0 else 'bad' }}">{{ money(summary.profit_before_tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if summary.profit >= 0 else 'bad' }}">{{ money(summary.profit) }}</div></div><div class="card"><div class="label">Маржа / ДРР</div><div class="value {{ margin_class(summary.margin) }}">{{ percent(summary.margin) }} / {{ percent(summary.drr) }}</div></div></div>
+<form class="filters" method="get"><label>Тип данных <select name="period_type"><option value="actual" {% if selected_type == 'actual' %}selected{% endif %}>Актуально без дублей</option><option value="weekly" {% if selected_type == 'weekly' %}selected{% endif %}>Только подтверждённые недели</option><option value="daily" {% if selected_type == 'daily' %}selected{% endif %}>Только ежедневные/оперативные</option><option value="" {% if selected_type == '' %}selected{% endif %}>Все типы, могут быть дубли</option></select></label><label>С даты <input type="date" name="date_from" value="{{ date_from_value }}"></label><label>По дату <input type="date" name="date_to" value="{{ date_to_value }}"></label><label>Операция <select name="operation_type"><option value="" {% if not operation_type %}selected{% endif %}>Все</option><option value="Продажа" {% if operation_type == 'Продажа' %}selected{% endif %}>Продажи</option><option value="Возврат" {% if operation_type == 'Возврат' %}selected{% endif %}>Возвраты</option><option value="Расход WB" {% if operation_type == 'Расход WB' %}selected{% endif %}>Расходы WB</option></select></label><input name="q" value="{{ query }}" placeholder="Поиск: артикул, товар, nmID"><label><input type="checkbox" name="negative" value="1" {% if only_negative %}checked{% endif %}> только минус</label><label><input type="checkbox" name="missing_cost" value="1" {% if only_missing_cost %}checked{% endif %}> без себеса</label><button type="submit">Показать</button><a class="button secondary" href="{{ export_url }}">Экспорт CSV</a></form>
+{% if sync_ok %}<div class="notice ok">✅ {{ sync_ok }}</div>{% endif %}{% if sync_error %}<div class="notice error">❌ {{ sync_error }}</div>{% endif %}
+<form method="post" action="/sales/sync" class="filters" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Обновляю…'"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="return_query" value="{{ return_query }}"><button type="submit">Обновить текущие продажи</button></form>
+<div class="summary"><span>Последний закрытый weekly: {{ date_display(data_status.last_weekly) if data_status.last_weekly else '—' }}</span><span>Последний загруженный daily: {{ date_display(data_status.last_daily) if data_status.last_daily else '—' }}</span><span>Последняя операция в БД: {{ date_display(data_status.latest_operation) if data_status.latest_operation else '—' }}</span><span>Данные актуальны на: {{ date_display(synchronized_through) if synchronized_through else '—' }}</span></div>
+{% if synchronization_warning %}<div class="notice error">История синхронизирована только по {{ date_display(synchronized_through) if synchronized_through else 'неизвестную дату' }}. Обновите текущие продажи.</div>{% endif %}
+{% if selected_type == 'actual' %}<div class="hint section">Режим <b>«Актуально без дублей»</b>: закрытые недели берутся из weekly-отчётов, а весь доступный хвост после {{ date_display(actual_cutoff) if actual_cutoff else 'начала доступной истории' }} — из daily-отчётов по выбранную дату включительно.</div>{% endif %}
+{% if rows %}<div class="grid section"><div class="card"><div class="label">Операций</div><div class="value">{{ summary.operations }}</div></div><div class="card"><div class="label">Продано</div><div class="value">{{ units(summary.sold_quantity) }} шт.</div></div><div class="card"><div class="label">Возвращено</div><div class="value">{{ units(summary.returned_quantity) }} шт.</div></div><div class="card"><div class="label">Нетто</div><div class="value">{{ units(summary.net_quantity) }} шт.</div></div><div class="card"><div class="label">Доход покупателей</div><div class="value">{{ money(summary.revenue) }}</div></div><div class="card"><div class="label">Расчётная выплата</div><div class="value">{{ money(summary.payout) }}</div></div><div class="card"><div class="label">WB удержания</div><div class="value">{{ money(summary.wb_expenses) }}</div></div><div class="card"><div class="label">Себестоимость</div><div class="value">{{ money(summary.cogs) }}</div></div><div class="card"><div class="label">Реклама</div><div class="value">{{ money(summary.advertising) }}</div></div><div class="card"><div class="label">До налога</div><div class="value {{ 'good' if summary.profit_before_tax >= 0 else 'bad' }}">{{ money(summary.profit_before_tax) }}</div></div><div class="card"><div class="label">Чистая прибыль</div><div class="value {{ 'good' if summary.profit >= 0 else 'bad' }}">{{ money(summary.profit) }}</div></div><div class="card"><div class="label">Маржа / ДРР</div><div class="value {{ margin_class(summary.margin) }}">{{ percent(summary.margin) }} / {{ percent(summary.drr) }}</div></div></div>
 <div class="section card"><div class="section-head"><div><h2>Операции</h2><div class="subtitle">Дата берётся из продажи/возврата WB; если WB не отдал дату — используется период отчёта</div></div><span class="muted">Показано до {{ limit }} строк</span></div><div class="table-wrap"><table style="min-width:1900px"><thead><tr><th>Дата</th><th>Операция</th><th>Товар</th><th>Артикул</th><th>nmID</th><th>Шт.</th><th>Цена/доход</th><th>Выплата WB</th><th>WB удержания</th><th>Логистика</th><th>Приёмка</th><th>Хранение</th><th>Прочие WB</th><th>Себес.</th><th>Внешние</th><th>Реклама</th><th>До налога</th><th>УСН</th><th>Чистая</th><th>Маржа</th><th>Статус</th><th>Период отчёта</th></tr></thead><tbody>{% for row in rows %}<tr><td>{{ date_display(row.operation_date or row.period_start) }}</td><td class="{{ 'profit-neg' if row.operation_type == 'Возврат' else '' }}">{{ row.operation_type }}</td><td>{{ row.name or row.sku }}</td><td class="muted">{{ row.sku }}</td><td class="muted">{{ row.nm_id or '—' }}</td><td>{{ units(row.quantity) }}</td><td>{{ money(row.revenue) }}</td><td>{{ money(row.payout) }}</td><td>{{ money(row.wb_expenses) }}</td><td>{{ money(row.logistics + row.transport) }}</td><td>{{ money(row.handling) }}</td><td>{{ money(row.storage) }}</td><td>{{ money(row.other_withholdings + row.fines) }}</td><td class="{{ 'profit-neg' if row.missing_cost else '' }}">{{ money(row.cogs) }}{% if row.missing_cost %} ⚠{% endif %}</td><td>{{ money(row.external_expenses) }}</td><td>{{ money(row.advertising) }}</td><td class="{{ 'profit-pos' if row.profit_before_tax >= 0 else 'profit-neg' }}">{{ money(row.profit_before_tax) }}</td><td>{{ money(row.tax) }}</td><td class="{{ 'profit-pos' if row.profit >= 0 else 'profit-neg' }}">{{ money(row.profit) }}</td><td>{{ percent(row.margin) }}</td><td>{% if row.period_type == 'weekly' %}<span class="rank-good">Подтверждено</span>{% elif row.period_type == 'daily' %}<span class="value warn">Оперативно</span>{% else %}<span class="muted">{{ row.period_type }}</span>{% endif %}</td><td class="muted">{{ period(row.period_start,row.period_end) }}</td></tr>{% endfor %}</tbody></table></div><div class="hint">Чтобы текущая незакрытая неделя появилась в истории, запусти в Telegram <b>/syncdaily</b>. Для загрузки ежедневных отчётов с конкретной даты используй <b>/backfilldaily ДД.ММ.ГГГГ</b>. Закрытые недели остаются финальными, дневные строки помечены как оперативные.</div></div>{% else %}<div class="card empty section">Операций пока нет. Установи v24 и запусти в Telegram <b>/backfill 01.04.2026</b>, чтобы заполнить построчную историю.</div>{% endif %}
 <footer>WB Profit Dashboard · история продаж строится из финансовых отчётов реализации</footer></div></body></html>
 """
@@ -792,6 +800,15 @@ def _date_time_display(value: datetime | None) -> str:
     if not value:
         return "—"
     return value.astimezone().strftime("%d.%m.%Y %H:%M") if value.tzinfo else value.strftime("%d.%m.%Y %H:%M")
+
+
+def _local_today() -> date:
+    timezone_name = os.getenv("REPORT_TIMEZONE", "Europe/Moscow").strip() or "Europe/Moscow"
+    try:
+        timezone = ZoneInfo(timezone_name)
+    except Exception:
+        timezone = ZoneInfo("Europe/Moscow")
+    return datetime.now(timezone).date()
 
 
 def _number_input(value: float) -> str:
@@ -2179,17 +2196,19 @@ def dashboard():
 
 
 
-def _latest_weekly_end_for_actual() -> date | None:
-    try:
-        rows = list_dashboard_reports(1, period_type="weekly")
-    except Exception:
-        return None
-    return rows[0].period_end if rows else None
-
-
 def _summarize_sale_rows(rows: list[Any]):
     operations = len(rows)
     quantity = sum(float(getattr(row, "quantity", 0.0) or 0.0) for row in rows)
+    sold_quantity = sum(
+        max(0.0, float(getattr(row, "quantity", 0.0) or 0.0))
+        for row in rows
+        if getattr(row, "operation_type", "") == "Продажа"
+    )
+    returned_quantity = sum(
+        abs(float(getattr(row, "quantity", 0.0) or 0.0))
+        for row in rows
+        if getattr(row, "operation_type", "") == "Возврат"
+    )
     revenue = sum(float(getattr(row, "revenue", 0.0) or 0.0) for row in rows)
     payout = sum(float(getattr(row, "payout", 0.0) or 0.0) for row in rows)
     wb_expenses = sum(float(getattr(row, "wb_expenses", 0.0) or 0.0) for row in rows)
@@ -2203,6 +2222,9 @@ def _summarize_sale_rows(rows: list[Any]):
     return SimpleNamespace(
         operations=operations,
         quantity=quantity,
+        sold_quantity=sold_quantity,
+        returned_quantity=returned_quantity,
+        net_quantity=sold_quantity - returned_quantity,
         revenue=revenue,
         payout=payout,
         wb_expenses=wb_expenses,
@@ -2236,17 +2258,19 @@ def _actual_sales_rows(
     only_negative: bool,
     only_missing_cost: bool,
 ) -> tuple[list[Any], Any, date | None]:
-    """Берёт закрытые weekly + daily только после последней закрытой недели, чтобы не было дублей."""
-    latest_weekly_end = _latest_weekly_end_for_actual()
-    combined: list[Any] = []
+    """Берёт закрытые weekly + daily после cutoff и дедуплицирует по ID операции WB."""
+    data_status = get_sales_data_status()
+    latest_weekly_end = data_status.last_weekly
+    weekly_rows: list[Any] = []
+    daily_rows: list[Any] = []
 
     weekly_to = date_to
     if latest_weekly_end is not None:
         weekly_to = min(date_to, latest_weekly_end) if date_to else latest_weekly_end
     if latest_weekly_end is not None and (date_from is None or date_from <= latest_weekly_end):
-        combined.extend(
+        weekly_rows.extend(
             list_sale_operations(
-                5000,
+                None,
                 period_type="weekly",
                 date_from=date_from,
                 date_to=weekly_to,
@@ -2262,9 +2286,9 @@ def _actual_sales_rows(
         cutoff = latest_weekly_end + timedelta(days=1)
         daily_from = max(date_from, cutoff) if date_from else cutoff
     if date_to is None or daily_from is None or daily_from <= date_to:
-        combined.extend(
+        daily_rows.extend(
             list_sale_operations(
-                5000,
+                None,
                 period_type="daily",
                 date_from=daily_from,
                 date_to=date_to,
@@ -2275,8 +2299,26 @@ def _actual_sales_rows(
             )
         )
 
+    deduplicated: dict[str, Any] = {}
+    for row in [*weekly_rows, *daily_rows]:
+        operation_id = str(getattr(row, "operation_id", "") or "")
+        key = operation_id or repr(_operation_sort_key(row))
+        deduplicated.setdefault(key, row)
+    combined = list(deduplicated.values())
     combined.sort(key=_operation_sort_key, reverse=True)
     summary = _summarize_sale_rows(combined)
+    logger.info(
+        "sales actual: selected_from=%s selected_to=%s last_weekly=%s last_daily=%s "
+        "latest_operation=%s weekly_rows=%d daily_rows=%d deduplicated_rows=%d",
+        date_from,
+        date_to,
+        data_status.last_weekly,
+        data_status.last_daily,
+        data_status.latest_operation,
+        len(weekly_rows),
+        len(daily_rows),
+        len(combined),
+    )
     return combined[:limit], summary, latest_weekly_end
 
 
@@ -2299,6 +2341,7 @@ def sales_history():
     only_negative = _query_bool("negative")
     only_missing_cost = _query_bool("missing_cost")
     limit = _query_int("limit", 500, minimum=50, maximum=5000)
+    data_status = get_sales_data_status()
 
     actual_cutoff = None
     if selected_type == "actual":
@@ -2332,14 +2375,29 @@ def sales_history():
             only_missing_cost=only_missing_cost,
         )
     args = request.args.to_dict(flat=True)
+    args.pop("sync_ok", None)
+    args.pop("sync_error", None)
     args["export"] = "csv"
     export_url = url_for("sales_export") + "?" + urllib.parse.urlencode(args)
+    return_args = request.args.to_dict(flat=True)
+    return_args.pop("sync_ok", None)
+    return_args.pop("sync_error", None)
+    return_query = urllib.parse.urlencode(return_args)
+    synchronized_through = data_status.synchronized_through
+    synchronization_warning = bool(date_to and (synchronized_through is None or date_to > synchronized_through))
     return render_template_string(
         SALES_TEMPLATE,
         rows=rows,
         summary=summary,
         selected_type=selected_type,
         actual_cutoff=actual_cutoff,
+        data_status=data_status,
+        synchronized_through=synchronized_through,
+        synchronization_warning=synchronization_warning,
+        sync_ok=request.args.get("sync_ok", "").strip()[:300],
+        sync_error=request.args.get("sync_error", "").strip()[:300],
+        return_query=return_query,
+        csrf=_csrf_token(),
         date_from_value=date_from.isoformat() if date_from else "",
         date_to_value=date_to.isoformat() if date_to else "",
         query=query,
@@ -2355,6 +2413,46 @@ def sales_history():
         date_display=_date_display,
         margin_class=_margin_class,
     )
+
+
+@app.post("/sales/sync")
+def sales_sync():
+    """Явно синхронизирует оперативный хвост; обычное открытие /sales WB API не вызывает."""
+    return_query = request.form.get("return_query", "")[:2000]
+    safe_args = {
+        key: value
+        for key, value in urllib.parse.parse_qsl(return_query, keep_blank_values=True)
+        if key in {"period_type", "date_from", "date_to", "operation_type", "q", "negative", "missing_cost", "limit"}
+    }
+    if not _valid_csrf():
+        safe_args["sync_error"] = "Не удалось проверить запрос. Обновите страницу и попробуйте снова."
+        return redirect(url_for("sales_history") + "?" + urllib.parse.urlencode(safe_args), code=303)
+
+    try:
+        status = get_sales_data_status()
+        today = _local_today()
+        start_date = (status.last_weekly + timedelta(days=1)) if status.last_weekly else status.last_daily
+        if start_date is None:
+            selected_from = safe_args.get("date_from", "")
+            start_date = datetime.strptime(selected_from, "%Y-%m-%d").date() if selected_from else today
+        result = asyncio.run(sync_daily_range(start_date, today))
+        safe_args["sync_ok"] = (
+            f"Добавлено {result.rows_inserted} новых операций, обновлено {result.days_updated} дней."
+            if result.days_updated
+            else "Daily-данные уже синхронизированы до сегодняшней даты."
+        )
+    except DailySyncAlreadyRunning:
+        safe_args["sync_error"] = "Синхронизация уже выполняется. Дождитесь её завершения и обновите страницу."
+    except WbApiError as exc:
+        logger.warning("WB API не обновил daily-данные из /sales: %s", exc)
+        safe_args["sync_error"] = f"WB не смог обновить продажи: {exc}"
+    except (RuntimeError, ValueError) as exc:
+        logger.warning("Daily-синхронизация из /sales не выполнена: %s", exc)
+        safe_args["sync_error"] = f"Не удалось обновить продажи: {exc}"
+    except Exception as exc:
+        logger.exception("Не удалось синхронизировать daily-данные из /sales")
+        safe_args["sync_error"] = "Не удалось обновить продажи из-за внутренней ошибки. Повторите позже."
+    return redirect(url_for("sales_history") + "?" + urllib.parse.urlencode(safe_args), code=303)
 
 
 @app.get("/sales/export")

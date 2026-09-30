@@ -29,7 +29,8 @@ from wb_acceptance import (
     fetch_acceptance_snapshot,
     select_new_or_better_slots,
 )
-from wb_db import database_enabled, database_status, init_database, list_history, save_report
+from wb_db import database_enabled, database_status, get_sales_data_status, init_database, list_history, save_report
+from wb_daily_sync import DailySyncAlreadyRunning, sync_daily_range
 from wb_management import init_management_store, seed_management_from_excel
 from dashboard import start_dashboard_server
 from wb_profit import ReportResult, analyze_report, build_messages, format_money, format_period, format_units
@@ -1110,77 +1111,28 @@ async def _run_daily_backfill(
     status_message,
     days: list[tuple[date, date]],
 ) -> None:
-    """Догружает ежедневные финансовые отчёты для текущей/незакрытой истории продаж."""
+    """Догружает отсутствующие daily-интервалы общим идемпотентным механизмом."""
     global _backfill_task, _backfill_stop_event
-
-    token = os.getenv("WB_API_TOKEN", "").strip()
-    stop_event = _backfill_stop_event
     try:
-        for index, (day_start, day_end) in enumerate(days, start=1):
-            if stop_event is not None and stop_event.is_set():
-                _backfill_state["stopped"] = True
-                _backfill_state["running"] = False
-                await status_message.edit_text(
-                    "⏹ Загрузка ежедневных отчётов остановлена.\n\n"
-                    + _backfill_state_text()
-                    + "\n\nУже сохранённые дни не удалены. Повторный запуск безопасен."
-                )
-                return
-
-            _backfill_state["current_start"] = day_start
-            _backfill_state["current_end"] = day_end
-            remaining = len(days) - index + 1
-            await status_message.edit_text(
-                "⏳ Загружаю ежедневные отчёты WB.\n\n"
-                f"День {index} из {len(days)}: {format_period(day_start, day_end)}\n"
-                f"Сохранено: {_backfill_state['saved']} | Пустых: {_backfill_state['empty']}\n"
-                f"Осталось примерно: {remaining} мин.\n\n"
-                "Это нужно, чтобы текущая незакрытая неделя отображалась в Истории продаж."
-            )
-
-            try:
-                result = await calculate_api_result(
-                    token,
-                    day_start,
-                    day_end,
-                    period="daily",
-                )
-            except WbApiError as exc:
-                text = str(exc)
-                if "204" in text or "no data" in text.lower() or "нет данных" in text.lower():
-                    _backfill_state["empty"] = int(_backfill_state["empty"]) + 1
-                    _backfill_state["processed"] = index
-                    continue
-                _backfill_state["last_error"] = text
-                _backfill_state["running"] = False
-                await status_message.edit_text(
-                    "❌ Загрузка ежедневных отчётов приостановлена из-за ошибки WB API.\n\n"
-                    + _backfill_state_text()
-                    + "\n\nУже сохранённые дни остались в базе. Повтори команду позже."
-                )
-                return
-
-            if result.active_items:
-                report_id = await asyncio.to_thread(
-                    save_report,
-                    result,
-                    period_type="daily",
-                    source="api-daily-backfill",
-                )
-                if report_id is None:
-                    raise RuntimeError("Не удалось сохранить дневной отчёт в PostgreSQL.")
-                _backfill_state["saved"] = int(_backfill_state["saved"]) + 1
-            else:
-                _backfill_state["empty"] = int(_backfill_state["empty"]) + 1
-
-            _backfill_state["processed"] = index
-
+        range_start = days[0][0]
+        range_end = days[-1][1]
+        result = await sync_daily_range(range_start, range_end)
+        _backfill_state["processed"] = result.days_updated
+        _backfill_state["saved"] = result.rows_inserted
+        _backfill_state["empty"] = max(0, result.days_updated - (1 if result.rows_received else 0))
         _backfill_state["finished_at"] = datetime.now(configured_timezone())
         _backfill_state["running"] = False
         await status_message.edit_text(
             "✅ Загрузка ежедневных отчётов завершена.\n\n"
-            + _backfill_state_text()
-            + "\n\nВ дашборде открой История продаж → режим «Актуально без дублей»."
+            f"Период: {format_period(range_start, range_end)}\n"
+            f"Добавлено операций: {result.rows_inserted}\n"
+            f"Обновлено дней: {result.days_updated}\n\n"
+            "В дашборде открой История продаж → режим «Актуально без дублей»."
+        )
+    except DailySyncAlreadyRunning:
+        _backfill_state["last_error"] = "Синхронизация daily-отчётов уже выполняется."
+        await status_message.edit_text(
+            "⏳ Синхронизация daily-отчётов уже выполняется. Дождись её завершения."
         )
     except asyncio.CancelledError:
         _backfill_state["stopped"] = True
@@ -1259,7 +1211,7 @@ async def _start_daily_backfill(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 async def sync_daily_reports(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Догружает ежедневные отчёты текущей незакрытой недели: с понедельника после последней закрытой недели по вчера."""
+    """Догружает пропуски после последней закрытой weekly-недели по сегодня."""
     if await reject_if_not_allowed(update):
         return
     message = update.effective_message
@@ -1269,9 +1221,13 @@ async def sync_daily_reports(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await message.reply_text("Сначала подключи PostgreSQL: в Railway нужна переменная DATABASE_URL.")
         return
     today = datetime.now(configured_timezone()).date()
-    _, last_sunday = last_completed_week(today)
-    start_date = last_sunday + timedelta(days=1)
-    end_date = today - timedelta(days=1)
+    data_status = await asyncio.to_thread(get_sales_data_status)
+    start_date = (
+        data_status.last_weekly + timedelta(days=1)
+        if data_status.last_weekly
+        else data_status.last_daily or today
+    )
+    end_date = today
     await _start_daily_backfill(
         update,
         context,
